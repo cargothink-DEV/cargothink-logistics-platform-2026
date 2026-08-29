@@ -9,7 +9,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const path = require('path');
-const fs = require('fs'); // added at top
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -618,10 +618,8 @@ app.get('/', (req, res) => {
 const initDb = async () => {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
-        // Check if file exists
         if (!fs.existsSync(schemaPath)) {
-            console.error('❌ schema.sql not found at', schemaPath);
-            throw new Error('schema.sql missing');
+            throw new Error(`schema.sql not found at ${schemaPath}`);
         }
         const schema = fs.readFileSync(schemaPath, 'utf8');
         const statements = schema.split(';').filter(s => s.trim().length > 0);
@@ -636,7 +634,6 @@ const initDb = async () => {
         }
     } catch (err) {
         console.error('❌ Migration failed:', err.message);
-        // Re-throw to stop server startup
         throw err;
     }
 };
