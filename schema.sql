@@ -1,4 +1,4 @@
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email TEXT UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
@@ -11,7 +11,7 @@ CREATE TABLE users (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE cargo (
+CREATE TABLE IF NOT EXISTS cargo (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     shipper_id UUID REFERENCES users(id) ON DELETE CASCADE,
     origin_city TEXT NOT NULL,
@@ -27,7 +27,7 @@ CREATE TABLE cargo (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE transport (
+CREATE TABLE IF NOT EXISTS transport (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     carrier_id UUID REFERENCES users(id) ON DELETE CASCADE,
     current_city TEXT NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE transport (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE matches (
+CREATE TABLE IF NOT EXISTS matches (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cargo_id UUID REFERENCES cargo(id) ON DELETE CASCADE,
     transport_id UUID REFERENCES transport(id) ON DELETE CASCADE,
@@ -52,7 +52,7 @@ CREATE TABLE matches (
     UNIQUE(cargo_id, transport_id)
 );
 
-CREATE TABLE messages (
+CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     sender_id UUID REFERENCES users(id) ON DELETE CASCADE,
     receiver_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -62,7 +62,7 @@ CREATE TABLE messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE payments (
+CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
@@ -76,7 +76,7 @@ CREATE TABLE payments (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE tracking (
+CREATE TABLE IF NOT EXISTS tracking (
     id SERIAL PRIMARY KEY,
     match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
     lat DECIMAL(10,8) NOT NULL,
@@ -86,7 +86,7 @@ CREATE TABLE tracking (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE subscriptions (
+CREATE TABLE IF NOT EXISTS subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     plan TEXT DEFAULT 'premium',
@@ -98,9 +98,9 @@ CREATE TABLE subscriptions (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE INDEX idx_cargo_status ON cargo(status);
-CREATE INDEX idx_transport_status ON transport(status);
-CREATE INDEX idx_matches_status ON matches(status);
-CREATE INDEX idx_messages_match_id ON messages(match_id);
-CREATE INDEX idx_payments_user_id ON payments(user_id);
-CREATE INDEX idx_tracking_match_id ON tracking(match_id);
+CREATE INDEX IF NOT EXISTS idx_cargo_status ON cargo(status);
+CREATE INDEX IF NOT EXISTS idx_transport_status ON transport(status);
+CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
+CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
+CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
+CREATE INDEX IF NOT EXISTS idx_tracking_match_id ON tracking(match_id);

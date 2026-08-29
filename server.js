@@ -42,7 +42,7 @@ pool.connect((err) => {
 });
 
 // === MIDDLEWARE ===
-app.set('trust proxy', true); // fixes rate‑limiter X-Forwarded-For warning
+app.set('trust proxy', 1); // fixes rate‑limiter X-Forwarded-For warning
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
