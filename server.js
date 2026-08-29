@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const { v4: uuidv4 } = require('uuid');
 const Joi = require('joi');
 const path = require('path');
+const fs = require('fs'); // added at top
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -41,9 +42,8 @@ pool.connect((err) => {
 });
 
 // === MIDDLEWARE ===
-app.use(helmet({
-    contentSecurityPolicy: false,
-}));
+app.set('trust proxy', true); // fixes rate‑limiter X-Forwarded-For warning
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
 
@@ -614,40 +614,50 @@ app.get('/', (req, res) => {
     res.sendFile(path.join(__dirname, 'index.html'));
 });
 
-// Start Server
 // === AUTO-MIGRATE: Create tables if they don't exist ===
-const fs = require('fs');
-
 const initDb = async () => {
-  try {
-    const schemaPath = path.join(__dirname, 'schema.sql');
-    const schema = fs.readFileSync(schemaPath, 'utf8');
-    const statements = schema.split(';').filter(s => s.trim().length > 0);
-    const client = await pool.connect();
     try {
-      for (let stmt of statements) {
-        await client.query(stmt + ';');
-      }
-      console.log('✅ Database schema applied successfully');
-    } finally {
-      client.release();
+        const schemaPath = path.join(__dirname, 'schema.sql');
+        // Check if file exists
+        if (!fs.existsSync(schemaPath)) {
+            console.error('❌ schema.sql not found at', schemaPath);
+            throw new Error('schema.sql missing');
+        }
+        const schema = fs.readFileSync(schemaPath, 'utf8');
+        const statements = schema.split(';').filter(s => s.trim().length > 0);
+        const client = await pool.connect();
+        try {
+            for (let stmt of statements) {
+                await client.query(stmt + ';');
+            }
+            console.log('✅ Database schema applied successfully');
+        } finally {
+            client.release();
+        }
+    } catch (err) {
+        console.error('❌ Migration failed:', err.message);
+        // Re-throw to stop server startup
+        throw err;
     }
-  } catch (err) {
-    // If tables already exist, just log and continue
-    console.log('⏩ Schema already applied (or error ignored):', err.message);
-  }
 };
 
-// Run the migration (don't await – let it run in background)
-initDb();
-app.listen(PORT, () => {
-    console.log('');
-    console.log('🚛 CargoThink v2.0 — Production Ready');
-    console.log(`📍 Server: http://localhost:${PORT}`);
-    console.log(`🔒 JWT: ${JWT_SECRET ? '✅ Configured' : '❌ Missing'}`);
-    console.log(`🗄️  Database: ${process.env.DB_NAME || 'cargothink'}`);
-    console.log('');
-    console.log('📦 Ready for production');
-    console.log('   Open http://localhost:5000 in your browser');
-    console.log('');
-});
+// === START SERVER (after migration) ===
+(async () => {
+    try {
+        await initDb();
+        app.listen(PORT, () => {
+            console.log('');
+            console.log('🚛 CargoThink v2.0 — Production Ready');
+            console.log(`📍 Server: http://localhost:${PORT}`);
+            console.log(`🔒 JWT: ${JWT_SECRET ? '✅ Configured' : '❌ Missing'}`);
+            console.log(`🗄️  Database: ${process.env.DB_NAME || 'cargothink'}`);
+            console.log('');
+            console.log('📦 Ready for production');
+            console.log('   Open http://localhost:5000 in your browser');
+            console.log('');
+        });
+    } catch (err) {
+        console.error('🚨 Server startup aborted due to migration error:', err.message);
+        process.exit(1);
+    }
+})();
