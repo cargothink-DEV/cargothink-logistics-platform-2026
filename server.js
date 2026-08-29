@@ -615,6 +615,32 @@ app.get('/', (req, res) => {
 });
 
 // Start Server
+// === AUTO-MIGRATE: Create tables if they don't exist ===
+const fs = require('fs');
+const path = require('path');
+
+const initDb = async () => {
+  try {
+    const schemaPath = path.join(__dirname, 'schema.sql');
+    const schema = fs.readFileSync(schemaPath, 'utf8');
+    const statements = schema.split(';').filter(s => s.trim().length > 0);
+    const client = await pool.connect();
+    try {
+      for (let stmt of statements) {
+        await client.query(stmt + ';');
+      }
+      console.log('✅ Database schema applied successfully');
+    } finally {
+      client.release();
+    }
+  } catch (err) {
+    // If tables already exist, just log and continue
+    console.log('⏩ Schema already applied (or error ignored):', err.message);
+  }
+};
+
+// Run the migration (don't await – let it run in background)
+initDb();
 app.listen(PORT, () => {
     console.log('');
     console.log('🚛 CargoThink v2.0 — Production Ready');
