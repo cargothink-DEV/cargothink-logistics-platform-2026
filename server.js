@@ -617,7 +617,6 @@ app.get('/', (req, res) => {
 // Start Server
 // === AUTO-MIGRATE: Create tables if they don't exist ===
 const fs = require('fs');
-const path = require('path');
 
 const initDb = async () => {
   try {
