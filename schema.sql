@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS cargo (
     shipper_id UUID REFERENCES users(id) ON DELETE CASCADE,
     origin_city TEXT NOT NULL,
     dest_city TEXT NOT NULL,
+    origin_address TEXT,
+    dest_address TEXT,
     weight_kg INTEGER NOT NULL,
     cargo_type TEXT NOT NULL,
     pickup_date DATE NOT NULL,
@@ -26,6 +28,10 @@ CREATE TABLE IF NOT EXISTS cargo (
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+-- Falls die Tabelle schon existiert, füge die Spalten hinzu:
+ALTER TABLE cargo ADD COLUMN IF NOT EXISTS origin_address TEXT;
+ALTER TABLE cargo ADD COLUMN IF NOT EXISTS dest_address TEXT;
 
 CREATE TABLE IF NOT EXISTS transport (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
