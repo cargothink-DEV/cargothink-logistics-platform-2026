@@ -42,7 +42,7 @@ pool.connect((err) => {
 });
 
 // === MIDDLEWARE ===
-app.set('trust proxy', 1); // fixes rate‑limiter X-Forwarded-For warning
+app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
 app.use(express.json({ limit: '10mb' }));
@@ -82,6 +82,8 @@ const loginSchema = Joi.object({
 const cargoSchema = Joi.object({
     origin_city: Joi.string().min(2).required().max(100),
     dest_city: Joi.string().min(2).required().max(100),
+    origin_address: Joi.string().allow('', null).max(200),
+    dest_address: Joi.string().allow('', null).max(200),
     weight_kg: Joi.number().integer().min(1).max(100000).required(),
     cargo_type: Joi.string().valid('refrigerated', 'open', 'van', 'isothermal', 'tank').required(),
     pickup_date: Joi.date().required(),
@@ -273,12 +275,12 @@ app.post('/api/cargo', auth, requireRole(['shipper']), async (req, res) => {
         const { error } = cargoSchema.validate(req.body);
         if (error) return res.status(400).json({ error: error.details[0].message });
 
-        const { origin_city, dest_city, weight_kg, cargo_type, pickup_date, delivery_date, price, description } = req.body;
+        const { origin_city, dest_city, origin_address, dest_address, weight_kg, cargo_type, pickup_date, delivery_date, price, description } = req.body;
         const id = uuidv4();
         await pool.query(
-            `INSERT INTO cargo (id, shipper_id, origin_city, dest_city, weight_kg, cargo_type, pickup_date, delivery_date, price, description)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-            [id, req.user.id, origin_city, dest_city, weight_kg, cargo_type, pickup_date, delivery_date || null, price, description || null]
+            `INSERT INTO cargo (id, shipper_id, origin_city, dest_city, origin_address, dest_address, weight_kg, cargo_type, pickup_date, delivery_date, price, description)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
+            [id, req.user.id, origin_city, dest_city, origin_address || null, dest_address || null, weight_kg, cargo_type, pickup_date, delivery_date || null, price, description || null]
         );
         setImmediate(() => { generateMatches(req.user.id).catch(console.error); });
         res.status(201).json({ id, message: 'Cargo created successfully' });
@@ -297,11 +299,11 @@ app.put('/api/cargo/:id', auth, requireRole(['shipper']), async (req, res) => {
         const { error } = cargoSchema.validate(req.body);
         if (error) return res.status(400).json({ error: error.details[0].message });
 
-        const { origin_city, dest_city, weight_kg, cargo_type, pickup_date, delivery_date, price, description } = req.body;
+        const { origin_city, dest_city, origin_address, dest_address, weight_kg, cargo_type, pickup_date, delivery_date, price, description } = req.body;
         await pool.query(
-            `UPDATE cargo SET origin_city = $1, dest_city = $2, weight_kg = $3, cargo_type = $4, pickup_date = $5, delivery_date = $6, price = $7, description = $8, updated_at = NOW()
-             WHERE id = $9 AND shipper_id = $10`,
-            [origin_city, dest_city, weight_kg, cargo_type, pickup_date, delivery_date || null, price, description || null, cargoId, req.user.id]
+            `UPDATE cargo SET origin_city = $1, dest_city = $2, origin_address = $3, dest_address = $4, weight_kg = $5, cargo_type = $6, pickup_date = $7, delivery_date = $8, price = $9, description = $10, updated_at = NOW()
+             WHERE id = $11 AND shipper_id = $12`,
+            [origin_city, dest_city, origin_address || null, dest_address || null, weight_kg, cargo_type, pickup_date, delivery_date || null, price, description || null, cargoId, req.user.id]
         );
         res.json({ message: 'Cargo updated successfully' });
     } catch (err) {
@@ -395,7 +397,7 @@ app.delete('/api/transport/:id', auth, requireRole(['carrier']), async (req, res
 app.get('/api/matches', auth, async (req, res) => {
     try {
         const result = await pool.query(`
-            SELECT m.*, c.origin_city, c.dest_city, c.weight_kg, c.cargo_type, c.price as cargo_price,
+            SELECT m.*, c.origin_city, c.dest_city, c.origin_address, c.dest_address, c.weight_kg, c.cargo_type, c.price as cargo_price,
                    t.current_city, t.capacity_kg, t.vehicle_type, t.price_per_km,
                    u1.full_name as shipper_name, u2.full_name as carrier_name
             FROM matches m
@@ -571,7 +573,7 @@ app.get('/api/admin/matches/all', auth, requireRole(['admin']), async (req, res)
     try {
         const result = await pool.query(`
             SELECT m.*,
-                   c.origin_city, c.dest_city, c.weight_kg, c.cargo_type,
+                   c.origin_city, c.dest_city, c.origin_address, c.dest_address, c.weight_kg, c.cargo_type,
                    t.current_city, t.capacity_kg, t.vehicle_type,
                    u1.full_name as shipper_name, u2.full_name as carrier_name
             FROM matches m
