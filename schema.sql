@@ -7,9 +7,14 @@ CREATE TABLE IF NOT EXISTS users (
     phone TEXT,
     role TEXT CHECK (role IN ('shipper', 'carrier', 'admin')) DEFAULT 'shipper',
     rating DECIMAL(3,2) DEFAULT 0,
+    total_ratings INTEGER DEFAULT 0,
+    verified BOOLEAN DEFAULT FALSE,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS total_ratings INTEGER DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT FALSE;
 
 CREATE TABLE IF NOT EXISTS cargo (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -52,10 +57,13 @@ CREATE TABLE IF NOT EXISTS matches (
     transport_id UUID REFERENCES transport(id) ON DELETE CASCADE,
     match_score DECIMAL(5,2) NOT NULL,
     status TEXT DEFAULT 'pending',
+    escrow_status TEXT DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW(),
     UNIQUE(cargo_id, transport_id)
 );
+
+ALTER TABLE matches ADD COLUMN IF NOT EXISTS escrow_status TEXT DEFAULT 'pending';
 
 CREATE TABLE IF NOT EXISTS messages (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -67,6 +75,44 @@ CREATE TABLE IF NOT EXISTS messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS escrow (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+    shipper_id UUID REFERENCES users(id),
+    carrier_id UUID REFERENCES users(id),
+    amount DECIMAL(12,2) NOT NULL,
+    driver_pay DECIMAL(12,2),
+    fuel DECIMAL(12,2),
+    tolls DECIMAL(12,2),
+    platform_fee DECIMAL(12,2),
+    currency TEXT DEFAULT 'RUB',
+    status TEXT DEFAULT 'held',
+    released_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ratings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+    rater_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    target_id UUID REFERENCES users(id) ON DELETE CASCADE,
+    rating INTEGER CHECK (rating >= 1 AND rating <= 5),
+    comment TEXT,
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(match_id, rater_id)
+);
+
+CREATE TABLE IF NOT EXISTS checkins (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id),
+    type TEXT CHECK (type IN ('pickup', 'delivery')),
+    lat DECIMAL(10,8),
+    lng DECIMAL(11,8),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
@@ -74,9 +120,6 @@ CREATE TABLE IF NOT EXISTS payments (
     amount DECIMAL(12,2) NOT NULL,
     currency TEXT DEFAULT 'RUB',
     status TEXT DEFAULT 'pending',
-    payment_method TEXT,
-    yookassa_payment_id TEXT,
-    yookassa_confirmation_url TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -98,7 +141,6 @@ CREATE TABLE IF NOT EXISTS subscriptions (
     status TEXT DEFAULT 'trial',
     trial_end TIMESTAMP,
     subscription_end TIMESTAMP,
-    payment_id UUID REFERENCES payments(id),
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
@@ -149,5 +191,6 @@ CREATE INDEX IF NOT EXISTS idx_transport_status ON transport(status);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id);
-CREATE INDEX IF NOT EXISTS idx_payments_user_id ON payments(user_id);
 CREATE INDEX IF NOT EXISTS idx_tracking_match_id ON tracking(match_id);
+CREATE INDEX IF NOT EXISTS idx_escrow_match ON escrow(match_id);
+CREATE INDEX IF NOT EXISTS idx_ratings_target ON ratings(target_id);
