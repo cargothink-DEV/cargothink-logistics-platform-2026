@@ -704,9 +704,13 @@ async function loadRoutesData() {
                 html += '<button class="btn btn-danger" onclick="declineMatch(\'' + m.id + '\')">❌ Отклонить</button>';
             }
             else if (m.status === 'accepted' && isShipper && !m.escrow_status_check) {
-                html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить (' + formatPrice(m.cargo_price) + ')</button>';
-                html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
-            }
+    html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить (' + formatPrice(m.cargo_price) + ')</button>';
+    html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
+}
+else if (m.status === 'accepted' && isShipper && m.escrow_status_check === 'held') {
+    html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">💰 Оплачено в Escrow — деньги вернутся если отменить сейчас</div>';
+    html += '<button class="btn btn-warning" onclick="refundMatch(\'' + m.id + '\')">↩️ Вернуть деньги и отменить</button>';
+}
             else if (m.status === 'accepted' && isCarrier) {
                 if (m.escrow_status_check === 'held') html += '<button class="btn btn-primary" onclick="startRoute(\'' + m.id + '\')">🚀 Начать рейс</button>';
                 else html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ждём оплаты</div>';
