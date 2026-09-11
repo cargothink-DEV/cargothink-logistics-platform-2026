@@ -16,18 +16,18 @@ const PORT = process.env.PORT || 5000;
 const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 
-// 🔥 KOMMISSION — hier ändern!
-const COMMISSION_RATE = 0.10; // 10%
-const DRIVER_SHARE = 0.70;    // 70%
-const FUEL_SHARE = 0.15;      // 15%
-const TOLLS_SHARE = 0.05;     // 5%
+// Kommission: 10%
+const COMMISSION_RATE = 0.10;
+const DRIVER_SHARE = 0.70;
+const FUEL_SHARE = 0.15;
+const TOLLS_SHARE = 0.05;
 
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
     console.error('❌ FATAL: JWT_SECRET missing');
     process.exit(1);
 }
 console.log('✅ Environment validated');
-console.log('💰 Commission rate: ' + (COMMISSION_RATE * 100) + '%');
+console.log('💰 Commission: ' + (COMMISSION_RATE * 100) + '%');
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -45,12 +45,13 @@ pool.connect((err) => {
 app.set('trust proxy', 1);
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(cors({ origin: FRONTEND_URL, credentials: true }));
-app.use(express.json({ limit: '15mb' }));
+app.use(express.json({ limit: '20mb' }));
 
-app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
+app.use('/api/', rateLimit({ windowMs: 15 * 60 * 1000, max: 300 }));
 app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true }));
 app.use('/api/auth/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true }));
 
+// ===== VALIDATION =====
 const registerSchema = Joi.object({
     email: Joi.string().email().required().max(255),
     password: Joi.string().min(6).required().max(255),
@@ -87,6 +88,7 @@ const transportSchema = Joi.object({
     description: Joi.string().allow('').max(500),
 });
 
+// ===== MIDDLEWARE =====
 const auth = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
@@ -108,6 +110,7 @@ const requireRole = (roles) => (req, res, next) => {
     next();
 };
 
+// ===== MATCHING =====
 function calculateMatchScore(cargo, transport) {
     let score = 0;
     if (transport.capacity_kg >= cargo.weight_kg) score += 30;
@@ -166,7 +169,6 @@ async function generateMatches(userId) {
     } catch (err) { console.error('Match generation error:', err); throw err; }
 }
 
-// 🔥 NEUE Preisberechnung mit 10% Kommission
 function calculateBreakdown(total_price) {
     const total = parseFloat(total_price);
     const driver_pay = Math.round(total * DRIVER_SHARE);
@@ -180,7 +182,6 @@ function calculateBreakdown(total_price) {
         fuel,
         tolls,
         platform_fee,
-        driver_net: driver_pay, // das ist was der Fahrer netto bekommt
         commission_rate: COMMISSION_RATE
     };
 }
@@ -194,9 +195,10 @@ async function getDistance(origin, dest) {
     return r.rows[0]?.distance_km || 1500;
 }
 
-// ===== AUTH =====
+// ===== HEALTH =====
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
+// ===== AUTH =====
 app.post('/api/auth/register', async (req, res) => {
     try {
         const { error } = registerSchema.validate(req.body);
@@ -285,8 +287,9 @@ app.post('/api/cargo', auth, requireRole(['shipper']), async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
             [id, req.user.id, origin_city, dest_city, origin_address || null, dest_address || null, weight_kg, cargo_type, pickup_date, delivery_date || null, price, description || null]
         );
+        console.log(`📦 Cargo created: ${origin_city} → ${dest_city} · ${price} ₽`);
         setImmediate(() => { generateMatches(req.user.id).catch(console.error); });
-        res.status(201).json({ id, message: 'Cargo created' });
+        res.status(201).json({ id, message: 'Cargo created', price: price });
     } catch (err) {
         console.error('Create cargo error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -431,7 +434,7 @@ app.post('/api/matches/:id/cancel', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ===== ESCROW (10% Kommission) =====
+// ===== ESCROW =====
 app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res) => {
     try {
         const { match_id, payment_method } = req.body;
@@ -447,6 +450,8 @@ app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res)
         const m = check.rows[0];
         const breakdown = calculateBreakdown(m.price);
 
+        console.log(`💰 Escrow deposit: ${breakdown.total_price} ₽ · Commission: ${breakdown.platform_fee} ₽`);
+
         const existing = await pool.query('SELECT id FROM escrow WHERE match_id = $1', [match_id]);
         if (existing.rows.length > 0) return res.status(400).json({ error: 'Escrow already exists' });
 
@@ -458,12 +463,7 @@ app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res)
         );
         await pool.query('UPDATE matches SET escrow_status = $1 WHERE id = $2', ['funded', match_id]);
         
-        res.json({ 
-            escrow_id: id, 
-            amount: breakdown.total_price, 
-            breakdown: breakdown, 
-            message: 'Payment secured in escrow' 
-        });
+        res.json({ escrow_id: id, amount: breakdown.total_price, breakdown: breakdown, message: 'Payment secured' });
     } catch (err) {
         console.error('Escrow deposit error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -483,7 +483,7 @@ app.post('/api/matches/:id/start', auth, requireRole(['carrier']), async (req, r
         `, [matchId, req.user.id]);
         if (check.rows.length === 0) return res.status(404).json({ error: 'Match not found' });
         if (check.rows[0].escrow_status !== 'held') {
-            return res.status(400).json({ error: 'Cannot start: escrow not funded by shipper' });
+            return res.status(400).json({ error: 'Cannot start: escrow not funded' });
         }
         await pool.query('UPDATE matches SET status = $1, updated_at = NOW() WHERE id = $2', ['in_transit', matchId]);
         res.json({ message: 'Route started' });
@@ -509,10 +509,41 @@ app.post('/api/checkins/:matchId', auth, async (req, res) => {
             `INSERT INTO checkins (id, match_id, user_id, type, lat, lng) VALUES ($1, $2, $3, $4, $5, $6)`,
             [id, matchId, req.user.id, type, lat || null, lng || null]
         );
+        console.log(`📍 Checkin: ${type} at match ${matchId}`);
         res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ===== PROOFS (Foto-Beweise) =====
+app.post('/api/proofs/:matchId', auth, async (req, res) => {
+    try {
+        const { type, photo_base64 } = req.body;
+        if (!['pickup', 'delivery'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+        if (!photo_base64) return res.status(400).json({ error: 'No photo' });
+        
+        const check = await pool.query(`
+            SELECT m.* FROM matches m
+            JOIN cargo c ON m.cargo_id = c.id
+            JOIN transport t ON m.transport_id = t.id
+            WHERE m.id = $1 AND (c.shipper_id = $2 OR t.carrier_id = $2)
+        `, [req.params.matchId, req.user.id]);
+        if (check.rows.length === 0) return res.status(403).json({ error: 'Not authorized' });
+        
+        const id = uuidv4();
+        const truncatedUrl = 'photo_' + Date.now() + '.jpg'; // Placeholder — echte S3-Integration später
+        await pool.query(
+            `INSERT INTO proofs (id, match_id, user_id, type, photo_url) VALUES ($1, $2, $3, $4, $5)`,
+            [id, req.params.matchId, req.user.id, type, truncatedUrl]
+        );
+        console.log(`📸 Proof uploaded: ${type}`);
+        res.json({ success: true, proof_id: id });
+    } catch (err) {
+        console.error('Proof error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== DELIVERED / CONFIRM =====
 app.post('/api/matches/:id/delivered', auth, requireRole(['carrier']), async (req, res) => {
     try {
         const matchId = req.params.id;
@@ -545,10 +576,11 @@ app.post('/api/matches/:id/confirm', auth, requireRole(['shipper']), async (req,
         await pool.query('UPDATE escrow SET status = $1, released_at = NOW(), updated_at = NOW() WHERE match_id = $2', ['released', matchId]);
         await pool.query('UPDATE cargo SET status = $1 WHERE id = (SELECT cargo_id FROM matches WHERE id = $2)', ['delivered', matchId]);
         await pool.query('UPDATE transport SET status = $1 WHERE id = (SELECT transport_id FROM matches WHERE id = $2)', ['available', matchId]);
-        res.json({ message: 'Payment released to carrier' });
+        res.json({ message: 'Payment released' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ===== REFUND =====
 app.post('/api/matches/:id/refund', auth, requireRole(['shipper']), async (req, res) => {
     try {
         const matchId = req.params.id;
@@ -578,6 +610,7 @@ app.post('/api/matches/:id/refund', auth, requireRole(['shipper']), async (req, 
     }
 });
 
+// ===== DISPUTES =====
 app.post('/api/disputes', auth, async (req, res) => {
     try {
         const { match_id, reason } = req.body;
@@ -601,6 +634,7 @@ app.post('/api/disputes', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
+// ===== RATINGS =====
 app.post('/api/ratings', auth, async (req, res) => {
     try {
         const { match_id, rating, comment } = req.body;
@@ -637,7 +671,7 @@ app.post('/api/ratings', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// ===== PRICE (mit 10% Kommission) =====
+// ===== PRICE ESTIMATE =====
 app.post('/api/price/estimate', auth, async (req, res) => {
     try {
         const { origin_city, dest_city, weight_kg, cargo_type } = req.body;
@@ -654,6 +688,57 @@ app.post('/api/price/estimate', auth, async (req, res) => {
         breakdown.price_per_km = pricePerKm;
         
         res.json(breakdown);
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ===== ETA =====
+app.get('/api/matches/:id/eta', auth, async (req, res) => {
+    try {
+        const m = await pool.query(`
+            SELECT c.origin_city, c.dest_city FROM matches m
+            JOIN cargo c ON m.cargo_id = c.id
+            WHERE m.id = $1
+        `, [req.params.id]);
+        if (m.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+        
+        const distance = await getDistance(m.rows[0].origin_city, m.rows[0].dest_city);
+        const avgSpeed = 70;
+        const hours = Math.round(distance / avgSpeed);
+        const eta = new Date(Date.now() + hours * 3600 * 1000);
+        
+        res.json({ distance_km: distance, hours, eta: eta.toISOString() });
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ===== TRACKING =====
+app.post('/api/tracking/:matchId', auth, async (req, res) => {
+    try {
+        const { matchId } = req.params;
+        const { lat, lng, speed, heading } = req.body;
+        const check = await pool.query(`
+            SELECT m.* FROM matches m
+            JOIN cargo c ON m.cargo_id = c.id
+            JOIN transport t ON m.transport_id = t.id
+            WHERE m.id = $1 AND (c.shipper_id = $2 OR t.carrier_id = $2)
+        `, [matchId, req.user.id]);
+        if (check.rows.length === 0) return res.status(403).json({ error: 'Not authorized' });
+
+        await pool.query(`INSERT INTO tracking (match_id, lat, lng, speed, heading) VALUES ($1, $2, $3, $4, $5)`, [matchId, lat, lng, speed || null, heading || null]);
+        res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+app.get('/api/tracking/:matchId', auth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT lat, lng, speed, heading, created_at FROM tracking WHERE match_id = $1 ORDER BY created_at ASC', [req.params.matchId]);
+        res.json(result.rows);
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+app.get('/api/tracking/:matchId/latest', auth, async (req, res) => {
+    try {
+        const result = await pool.query('SELECT lat, lng, speed, heading, created_at FROM tracking WHERE match_id = $1 ORDER BY created_at DESC LIMIT 1', [req.params.matchId]);
+        res.json(result.rows[0] || null);
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -743,6 +828,7 @@ app.get('/api/stats', auth, async (req, res) => {
 // ===== FRONTEND =====
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
+// ===== MIGRATION =====
 const initDb = async () => {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
@@ -769,7 +855,7 @@ const initDb = async () => {
 (async () => {
     try {
         await initDb();
-        app.listen(PORT, () => console.log(`🚛 CargoThink v2.4 running on ${PORT}`));
+        app.listen(PORT, () => console.log(`🚛 CargoThink v2.5 running on ${PORT}`));
     } catch (err) {
         console.error('🚨 Startup aborted:', err.message);
         process.exit(1);
