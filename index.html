@@ -98,7 +98,7 @@ body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; displa
 .cost-row.driver { color:#4ADE80; }
 .cost-row.fuel { color:#FBBF24; }
 .cost-row.tolls { color:#F87171; }
-.cost-row.fee { color:#60A5FA; }
+.cost-row.fee { color:#4ADE80; }
 .cost-row.total { color:#F5B51B; font-weight:700; font-size:14px; padding-top:8px; border-top:1px solid #25292D; margin-top:4px; }
 .route-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
 .route-actions .btn { flex:1; min-width:120px; }
@@ -117,6 +117,7 @@ body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; displa
 .factor-down { background:#4ADE8022; color:#4ADE80; }
 .diesel-widget { background:#14171A; border:1px solid #FBBF2433; border-radius:10px; padding:10px 14px; display:flex; align-items:center; gap:10px; font-size:12px; color:#888B93; }
 .diesel-widget .val { color:#FBBF24; font-weight:800; font-size:16px; }
+.free-badge { display:inline-block; background:#4ADE8022; color:#4ADE80; padding:4px 14px; border-radius:20px; font-size:12px; font-weight:700; margin-left:10px; }
 .toast { position:fixed; bottom:24px; right:24px; background:#14171A; border:1px solid #F5B51B; border-radius:10px; padding:16px 24px; max-width:360px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,0.6); }
 @media (max-width:768px) { .sidebar { display:none; } .main { padding:16px; } .stats { grid-template-columns:1fr 1fr; } .form-grid { grid-template-columns:1fr; } .route-info-grid { grid-template-columns:1fr; } .intel-grid { grid-template-columns:1fr; } }
 </style>
@@ -156,7 +157,8 @@ body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; displa
 <main class="main" id="mainContent">
 <div id="authRequired" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:80vh; text-align:center;">
 <h1 style="font-size:48px; margin-bottom:16px;">🚛 CargoThink</h1>
-<p style="color:#888B93; font-size:18px; margin-bottom:32px;">Войдите или зарегистрируйтесь</p>
+<p style="color:#888B93; font-size:18px; margin-bottom:8px;">Логистическая платформа нового поколения</p>
+<p style="color:#4ADE80; font-size:16px; font-weight:700; margin-bottom:32px;">0% комиссия · Безопасная оплата · Проверенные перевозчики</p>
 <div style="display:flex; gap:16px;">
 <button class="btn btn-primary" onclick="showLogin()">Войти</button>
 <button class="btn btn-secondary" onclick="showRegister()">Регистрация</button>
@@ -368,6 +370,7 @@ function updatePricePreview() {
             html += '</span></div>';
             html += '<div class="row"><span>⛽ Дизель сегодня</span><span>' + data.diesel_current + ' ₽/л</span></div>';
             html += '<div class="row"><span>📊 Заказов / Свободных ТС</span><span>' + data.open_cargos + ' / ' + data.available_trucks + '</span></div>';
+            html += '<div class="row"><span>💰 Комиссия CargoThink</span><span style="color:#4ADE80;">FREE (0%)</span></div>';
             html += '<div style="text-align:center;margin-top:10px;"><button class="btn btn-secondary btn-sm" onclick="useDynamicPrice()">Использовать эту цену</button></div>';
             html += '</div>';
             container.innerHTML = html;
@@ -387,7 +390,7 @@ function useDynamicPrice() {
 // OVERVIEW
 // ═══════════════════════════════════════════════════════
 function loadOverview() {
-    document.getElementById('page-overview').innerHTML = '<div class="main-header"><h1><span>Обзор</span></h1><div class="header-actions"><button class="btn btn-primary" onclick="openCargoModal()">+ Новый груз</button><button class="btn btn-secondary" onclick="openTransportModal()">+ Новый транспорт</button></div></div><div id="dieselWidget" class="diesel-widget" style="margin-bottom:20px;">⛽ <span>Дизель:</span> <span class="val" id="dieselValue">...</span> <span>/ литр</span></div><div class="stats"><div class="stat-card"><div class="label">Активные</div><div class="value" id="statActive">—</div></div><div class="stat-card"><div class="label">Открытые грузы</div><div class="value" id="statCargo">—</div></div><div class="stat-card"><div class="label">Доступный транспорт</div><div class="value" id="statTransport">—</div></div><div class="stat-card"><div class="label">Завершено</div><div class="value" id="statCompletion">—</div></div></div><div class="intel-section"><span class="badge">🧠 CargoThink Intelligence · Комиссия 10% · Dynamic Pricing</span><h3 id="intelTitle">Анализ совпадений...</h3><div class="sub" id="intelSub">Поиск оптимальных вариантов</div><div class="intel-grid" id="intelGrid"><div class="loading"><div class="spinner"></div></div></div></div>';
+    document.getElementById('page-overview').innerHTML = '<div class="main-header"><h1><span>Обзор</span><span class="free-badge">💰 Комиссия 0%</span></h1><div class="header-actions"><button class="btn btn-primary" onclick="openCargoModal()">+ Новый груз</button><button class="btn btn-secondary" onclick="openTransportModal()">+ Новый транспорт</button></div></div><div id="dieselWidget" class="diesel-widget" style="margin-bottom:20px;">⛽ <span>Дизель:</span> <span class="val" id="dieselValue">...</span> <span>/ литр</span></div><div class="stats"><div class="stat-card"><div class="label">Активные</div><div class="value" id="statActive">—</div></div><div class="stat-card"><div class="label">Открытые грузы</div><div class="value" id="statCargo">—</div></div><div class="stat-card"><div class="label">Доступный транспорт</div><div class="value" id="statTransport">—</div></div><div class="stat-card"><div class="label">Завершено</div><div class="value" id="statCompletion">—</div></div></div><div class="intel-section"><span class="badge">🧠 CargoThink Intelligence · Комиссия 0% (FREE) · Dynamic Pricing</span><h3 id="intelTitle">Анализ совпадений...</h3><div class="sub" id="intelSub">Поиск оптимальных вариантов</div><div class="intel-grid" id="intelGrid"><div class="loading"><div class="spinner"></div></div></div></div>';
     loadDashboardData();
 }
 
@@ -709,10 +712,10 @@ async function loadRoutesData() {
                 html += '<div class="cost-breakdown">';
                 var escrowStatusText = m.escrow_status_check === 'held' ? '🔒 Зарезервировано' : m.escrow_status_check === 'released' ? '✅ Выплачено' : m.escrow_status_check === 'refunded' ? '↩️ Возврат' : m.escrow_status_check === 'disputed' ? '⚠️ Спор' : m.escrow_status_check;
                 html += '<div class="cost-row total"><span>💰 Оплата в Escrow <small style="color:#4ADE80;">(' + escrowStatusText + ')</small></span><span>' + formatPrice(m.escrow_amount) + '</span></div>';
-                if (m.driver_pay) html += '<div class="cost-row driver"><span>💵 Перевозчику (70%)</span><span>' + formatPrice(m.driver_pay) + '</span></div>';
-                if (m.fuel) html += '<div class="cost-row fuel"><span>⛽ Топливо (15%)</span><span>' + formatPrice(m.fuel) + '</span></div>';
-                if (m.tolls) html += '<div class="cost-row tolls"><span>🛣️ Платные дороги (5%)</span><span>' + formatPrice(m.tolls) + '</span></div>';
-                if (m.platform_fee) html += '<div class="cost-row fee"><span>🏦 Комиссия (10%)</span><span>' + formatPrice(m.platform_fee) + '</span></div>';
+                if (m.driver_pay) html += '<div class="cost-row driver"><span>💵 Перевозчику (100%)</span><span>' + formatPrice(m.driver_pay) + '</span></div>';
+                if (m.fuel) html += '<div class="cost-row fuel"><span>⛽ Ориентир. топливо</span><span>' + formatPrice(m.fuel) + '</span></div>';
+                if (m.tolls) html += '<div class="cost-row tolls"><span>🛣️ Ориентир. платные дороги</span><span>' + formatPrice(m.tolls) + '</span></div>';
+                html += '<div class="cost-row fee"><span>🏦 Комиссия CargoThink (FREE)</span><span>0 ₽</span></div>';
                 html += '</div>';
             }
             
@@ -791,7 +794,7 @@ async function depositEscrow(matchId) {
     if (!confirm('Оплатить в Escrow? Деньги будут зарезервированы до подтверждения доставки.')) return;
     try {
         var result = await apiCall('/escrow/deposit', 'POST', { match_id: matchId, payment_method: 'manual' });
-        showToast('Успех', 'Оплачено ' + formatPrice(result.amount));
+        showToast('Успех', 'Оплачено ' + formatPrice(result.amount) + ' (комиссия 0%)');
         loadRoutesData();
     } catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -837,7 +840,7 @@ async function confirmDelivery(matchId) {
 }
 
 async function confirmReceipt(matchId) {
-    if (!confirm('Подтвердить получение? Оплата уйдёт перевозчику.')) return;
+    if (!confirm('Подтвердить получение? Оплата уйдёт перевозчику (комиссия 0%).')) return;
     try { await apiCall('/matches/' + matchId + '/confirm', 'POST'); showToast('Успех', 'Оплата отпущена'); loadRoutesData(); }
     catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -969,7 +972,7 @@ function stopMessagePolling() {
 // SETTINGS
 // ═══════════════════════════════════════════════════════
 function loadSettings() {
-    document.getElementById('page-settings').innerHTML = '<div class="main-header"><h1><span>Настройки</span></h1></div><div class="card"><h3>👤 Профиль</h3><div style="padding:20px;"><div class="form-group"><label>Имя</label><input class="input" value="' + (currentUser ? currentUser.full_name : '') + '" disabled></div><div class="form-group"><label>Email</label><input class="input" value="' + (currentUser ? currentUser.email : '') + '" disabled></div><div class="form-group"><label>Роль</label><input class="input" value="' + (currentUser && currentUser.role === 'shipper' ? 'Грузоотправитель' : 'Перевозчик') + '" disabled></div><div class="form-group"><label>Рейтинг</label><input class="input" value="⭐ ' + (currentUser ? (currentUser.rating || 0) : 0) + ' / 5.0" disabled></div></div></div><div class="card"><h3>💰 Тарифы и комиссии</h3><div style="padding:20px;color:#888B93;font-size:13px;"><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Комиссия CargoThink</span><span style="color:#F5B51B;font-weight:700;">10%</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Перевозчику</span><span style="color:#4ADE80;font-weight:700;">70%</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Топливо (оценка)</span><span style="color:#FBBF24;font-weight:700;">15%</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Платные дороги (оценка)</span><span style="color:#F87171;font-weight:700;">5%</span></div></div></div><div class="card"><h3>📊 Dynamic Pricing</h3><div style="padding:20px;color:#888B93;font-size:13px;">Цена автоматически меняется в зависимости от:<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>🚛 Спрос (заказы / машины)</span><span>×0.85 – ×1.9</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⛽ Цена дизеля</span><span>×0.9 – ×1.8</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⏰ Время суток</span><span>×1.0 – ×1.25</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>❄️ Сезон</span><span>×1.0 – ×1.2</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⚡ Срочность</span><span>×0.95 – ×1.3</span></div></div></div></div><div class="card"><button class="btn btn-danger" onclick="logout()">Выйти</button></div>';
+    document.getElementById('page-settings').innerHTML = '<div class="main-header"><h1><span>Настройки</span></h1></div><div class="card"><h3>👤 Профиль</h3><div style="padding:20px;"><div class="form-group"><label>Имя</label><input class="input" value="' + (currentUser ? currentUser.full_name : '') + '" disabled></div><div class="form-group"><label>Email</label><input class="input" value="' + (currentUser ? currentUser.email : '') + '" disabled></div><div class="form-group"><label>Роль</label><input class="input" value="' + (currentUser && currentUser.role === 'shipper' ? 'Грузоотправитель' : 'Перевозчик') + '" disabled></div><div class="form-group"><label>Рейтинг</label><input class="input" value="⭐ ' + (currentUser ? (currentUser.rating || 0) : 0) + ' / 5.0" disabled></div></div></div><div class="card" style="border-color:#4ADE80;"><h3 style="color:#4ADE80;">💰 Тарифы — Всё бесплатно</h3><div style="padding:20px;color:#888B93;font-size:13px;"><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Комиссия CargoThink</span><span style="color:#4ADE80;font-weight:700;">FREE (0%)</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Перевозчику</span><span style="color:#4ADE80;font-weight:700;">100%</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Регистрация</span><span style="color:#4ADE80;font-weight:700;">Бесплатно</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Публикация груза</span><span style="color:#4ADE80;font-weight:700;">Бесплатно</span></div><div style="display:flex;justify-content:space-between;padding:6px 0;"><span>Escrow (безопасная оплата)</span><span style="color:#4ADE80;font-weight:700;">Включено</span></div><div style="margin-top:12px;padding-top:12px;border-top:1px solid #25292D;color:#F5B51B;font-size:12px;">🎉 CargoThink полностью бесплатен. Мы зарабатываем только когда вы сами захотите нас поддержать.</div></div></div><div class="card"><h3>📊 Dynamic Pricing</h3><div style="padding:20px;color:#888B93;font-size:13px;">Цена автоматически меняется в зависимости от:<div style="margin-top:10px;"><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>🚛 Спрос (заказы / машины)</span><span>×0.85 – ×1.9</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⛽ Цена дизеля</span><span>×0.9 – ×1.8</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⏰ Время суток</span><span>×1.0 – ×1.25</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>❄️ Сезон</span><span>×1.0 – ×1.2</span></div><div style="display:flex;justify-content:space-between;padding:4px 0;"><span>⚡ Срочность</span><span>×0.95 – ×1.3</span></div></div></div></div><div class="card"><button class="btn btn-danger" onclick="logout()">Выйти</button></div>';
 }
 
 document.addEventListener('keydown', function(e) {
@@ -985,7 +988,7 @@ if (token && currentUser) {
 } else {
     showAuthRequired();
 }
-console.log('🚛 CargoThink v3.1 loaded · Commission: 10% · Dynamic Pricing: ON · Refund: ON');
+console.log('🚛 CargoThink v4.0 loaded · Commission: 0% (FREE) · Dynamic Pricing: ON · Refund: ON');
 </script>
 </body>
 </html>
