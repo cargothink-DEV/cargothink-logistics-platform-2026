@@ -1,56 +1,736 @@
-// Escrow-Anzeige (nur wenn vorhanden)
-if (m.escrow_status_check) {
-    html += '<div class="cost-breakdown">';
-    html += '<div class="cost-row total"><span>💰 Оплата в Escrow <small style="color:#4ADE80;">(' + (m.escrow_status_check === 'held' ? '🔒 Зарезервировано' : m.escrow_status_check === 'released' ? '✅ Выплачено' : m.escrow_status_check === 'refunded' ? '↩️ Возврат' : m.escrow_status_check) + ')</small></span><span>' + (m.escrow_amount ? parseFloat(m.escrow_amount).toLocaleString() + ' ₽' : '—') + '</span></div>';
-    if (m.driver_pay) html += '<div class="cost-row driver"><span>Водитель</span><span>' + parseFloat(m.driver_pay).toLocaleString() + ' ₽</span></div>';
-    if (m.fuel) html += '<div class="cost-row fuel"><span>Топливо</span><span>' + parseFloat(m.fuel).toLocaleString() + ' ₽</span></div>';
-    if (m.tolls) html += '<div class="cost-row tolls"><span>Платные дороги</span><span>' + parseFloat(m.tolls).toLocaleString() + ' ₽</span></div>';
-    if (m.platform_fee) html += '<div class="cost-row fee"><span>Комиссия сервиса</span><span>' + parseFloat(m.platform_fee).toLocaleString() + ' ₽</span></div>';
-    html += '</div>';
-}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CargoThink — ГрузоЛогика</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:opsz@14..32&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; display:flex; min-height:100vh; }
+.sidebar { width:260px; background:#14171A; border-right:1px solid #25292D; padding:24px 16px; display:flex; flex-direction:column; height:100vh; position:sticky; top:0; overflow-y:auto; flex-shrink:0; }
+.logo-area { display:flex; align-items:center; gap:14px; margin-bottom:32px; padding-bottom:20px; border-bottom:1px solid #25292D; }
+.logo-symbol { width:44px; height:44px; flex-shrink:0; }
+.logo-symbol svg { width:100%; height:100%; }
+.logo-text { font-weight:800; font-size:20px; letter-spacing:-0.5px; color:#fff; }
+.logo-text span { color:#F5B51B; }
+.logo-sub { font-size:9px; color:#888B93; text-transform:uppercase; letter-spacing:0.2em; }
+.nav-group { margin-bottom:20px; }
+.nav-group-label { font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.1em; color:#888B93; padding-left:12px; margin-bottom:6px; }
+.nav-item { display:flex; align-items:center; gap:14px; padding:10px 14px; border-radius:10px; color:#888B93; font-size:14px; font-weight:500; transition:0.2s; cursor:pointer; }
+.nav-item svg { width:18px; height:18px; fill:none; stroke:#888B93; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; transition:0.2s; }
+.nav-item:hover { background:#25292D; color:#fff; }
+.nav-item:hover svg { stroke:#fff; }
+.nav-item.active { background:#25292D; color:#F5B51B; }
+.nav-item.active svg { stroke:#F5B51B; }
+.user-section { margin-top:auto; padding-top:16px; border-top:1px solid #25292D; display:flex; align-items:center; gap:12px; }
+.user-avatar { width:38px; height:38px; border-radius:50%; background:#F5B51B; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:15px; color:#0B0D0F; }
+.user-name { font-size:14px; font-weight:600; }
+.user-role { font-size:11px; color:#888B93; }
+.main { flex:1; padding:28px 36px; overflow-y:auto; max-height:100vh; min-width:0; }
+.main-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:28px; flex-wrap:wrap; gap:12px; }
+.main-header h1 { font-size:26px; font-weight:700; letter-spacing:-0.5px; }
+.main-header h1 span { color:#F5B51B; }
+.header-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.btn { padding:10px 22px; border:none; border-radius:10px; font-weight:600; font-size:14px; cursor:pointer; transition:0.2s; display:inline-flex; align-items:center; gap:8px; justify-content:center; }
+.btn-primary { background:#F5B51B; color:#0B0D0F; }
+.btn-primary:hover { background:#e0a810; }
+.btn-secondary { background:#14171A; color:#F4F5F6; border:1px solid #25292D; }
+.btn-secondary:hover { background:#25292D; }
+.btn-success { background:#4ADE80; color:#0B0D0F; }
+.btn-success:hover { background:#22c55e; }
+.btn-danger { background:#F87171; color:#fff; }
+.btn-danger:hover { background:#dc2626; }
+.btn-warning { background:#FBBF24; color:#0B0D0F; }
+.btn-sm { padding:6px 16px; font-size:12px; border-radius:6px; }
+.stats { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+.stat-card { background:#14171A; border:1px solid #25292D; border-radius:16px; padding:18px 22px; }
+.stat-card .label { font-size:11px; text-transform:uppercase; letter-spacing:0.05em; color:#888B93; font-weight:600; }
+.stat-card .value { font-size:30px; font-weight:800; margin-top:2px; }
+.card { background:#14171A; border:1px solid #25292D; border-radius:16px; padding:20px 24px; margin-bottom:20px; }
+.card-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.card-header h3 { font-size:16px; font-weight:600; color:#fff; }
+.intel-section { background:#14171A; border:1px solid #F5B51B; border-radius:16px; padding:24px 28px; margin-bottom:28px; position:relative; }
+.intel-section .badge { position:absolute; top:-10px; left:20px; background:#F5B51B; color:#0B0D0F; padding:2px 14px; border-radius:20px; font-size:10px; font-weight:700; text-transform:uppercase; }
+.intel-section h3 { font-size:18px; font-weight:700; margin-bottom:6px; }
+.intel-section .sub { color:#888B93; font-size:14px; margin-bottom:18px; }
+.intel-grid { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.intel-card { background:#0B0D0F; border:1px solid #25292D; border-radius:10px; padding:16px 18px; }
+.intel-card .route { font-weight:600; font-size:14px; }
+.intel-card .route small { display:block; font-weight:400; color:#888B93; font-size:12px; }
+.intel-card .match { display:inline-block; background:#4ADE80; color:#0B0D0F; padding:2px 10px; border-radius:20px; font-size:11px; font-weight:700; margin:6px 0; }
+.intel-card .detail { font-size:12px; color:#888B93; margin:4px 0; }
+.intel-card .price { font-weight:700; color:#F5B51B; font-size:18px; }
+.page-content { display:none; width:100%; }
+.page-content.active { display:block; }
+.loading { text-align:center; color:#888B93; padding:20px; }
+.loading .spinner { display:inline-block; width:24px; height:24px; border:3px solid #25292D; border-top-color:#F5B51B; border-radius:50%; animation:spin 0.8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.form-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.form-group { display:grid; gap:6px; margin-bottom:10px; }
+.form-group.full { grid-column:1/-1; }
+.form-group label { font-size:11px; color:#888B93; font-weight:600; text-transform:uppercase; }
+.input { width:100%; padding:10px; background:#0B0D0F; border:1px solid #25292D; border-radius:6px; color:#fff; font-size:14px; }
+.input:focus { border-color:#F5B51B; outline:none; }
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,0.8); align-items:center; justify-content:center; z-index:1000; padding:20px; }
+.modal-overlay.open { display:flex; }
+.modal { background:#14171A; border:1px solid #25292D; border-radius:16px; padding:32px; max-width:600px; width:100%; max-height:90vh; overflow-y:auto; }
+.modal-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; }
+.modal-header h2 { font-size:20px; color:#fff; }
+.modal-actions { display:flex; gap:12px; margin-top:20px; }
+.modal-actions .btn { flex:1; }
+.close { background:transparent; border:none; color:#888B93; font-size:24px; cursor:pointer; }
+.routes-container { display:grid; grid-template-columns:1fr; gap:20px; }
+.route-card { background:#14171A; border:1px solid #25292D; border-radius:16px; padding:20px 24px; border-left:4px solid #F5B51B; }
+.route-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:14px; flex-wrap:wrap; gap:10px; }
+.route-title { font-size:18px; font-weight:700; margin-bottom:4px; }
+.route-subtitle { font-size:13px; color:#888B93; }
+.route-status-badge { display:inline-flex; align-items:center; gap:6px; padding:4px 12px; border-radius:20px; font-size:12px; font-weight:600; }
+.status-pending { background:#f59e0b22; color:#FBBF24; }
+.status-accepted { background:#3b82f622; color:#60A5FA; }
+.status-funded { background:#8b5cf622; color:#a78bfa; }
+.status-in_transit { background:#F5B51B22; color:#F5B51B; }
+.status-delivered { background:#4ADE8022; color:#4ADE80; }
+.status-delivered_by_carrier { background:#22c55e22; color:#22c55e; }
+.status-cancelled { background:#F8717122; color:#F87171; }
+.route-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:16px; }
+.route-info-item { background:#0B0D0F; padding:12px 14px; border-radius:8px; }
+.route-info-item .lbl { font-size:11px; color:#888B93; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; }
+.route-info-item .val { font-size:15px; font-weight:600; color:#fff; }
+.route-info-item .val.price { color:#F5B51B; }
+.rating-badge { display:inline-block; background:#F5B51B22; color:#F5B51B; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; margin-left:6px; }
+.verified-badge { display:inline-block; background:#4ADE8022; color:#4ADE80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; margin-left:6px; }
+.cost-breakdown { background:#0B0D0F; border-radius:8px; padding:14px; margin-top:12px; }
+.cost-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
+.cost-row.driver { color:#4ADE80; }
+.cost-row.fuel { color:#FBBF24; }
+.cost-row.tolls { color:#F87171; }
+.cost-row.fee { color:#60A5FA; }
+.cost-row.total { color:#F5B51B; font-weight:700; font-size:14px; padding-top:8px; border-top:1px solid #25292D; margin-top:4px; }
+.route-actions { display:flex; gap:8px; margin-top:16px; flex-wrap:wrap; }
+.route-actions .btn { flex:1; min-width:140px; }
+.empty-state { text-align:center; color:#888B93; padding:60px 20px; }
+.empty-state h3 { font-size:18px; margin-bottom:8px; color:#fff; }
+.status-pill { display:inline-block; padding:3px 10px; border-radius:12px; font-size:11px; font-weight:600; }
+.toast { position:fixed; bottom:24px; right:24px; background:#14171A; border:1px solid #F5B51B; border-radius:10px; padding:16px 24px; max-width:360px; z-index:9999; box-shadow:0 8px 32px rgba(0,0,0,0.6); }
+@media (max-width:768px) { .sidebar { display:none; } .main { padding:16px; } .stats { grid-template-columns:1fr 1fr; } .form-grid { grid-template-columns:1fr; } .route-info-grid { grid-template-columns:1fr; } .intel-grid { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<aside class="sidebar">
+<div class="logo-area">
+<div class="logo-symbol">
+<svg viewBox="0 0 48 48" fill="none"><path d="M14 34 C14 42 34 42 34 34 C34 26 14 26 14 18 C14 10 34 10 34 18" stroke="#F5B51B" stroke-width="4" stroke-linecap="round" fill="none"/><path d="M34 18 L38 22 L34 26" stroke="#F5B51B" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+</div>
+<div>
+<div class="logo-text">Cargo<span>Think</span></div>
+<div class="logo-sub">ГрузоЛогика</div>
+</div>
+</div>
+<div class="nav-group"><div class="nav-group-label">ОБЗОР</div>
+<a class="nav-item active" data-page="overview"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/></svg><span>Обзор</span></a>
+</div>
+<div class="nav-group"><div class="nav-group-label">ОПЕРАЦИИ</div>
+<a class="nav-item" data-page="cargo"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/></svg><span>Грузы</span></a>
+<a class="nav-item" data-page="transport"><svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg><span>Транспорт</span></a>
+<a class="nav-item" data-page="routes"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 5 5 5-5 5 5"/><path d="M3 7l5-5 5 5 5-5 5 5"/></svg><span>Маршруты</span></a>
+</div>
+<div class="nav-group"><div class="nav-group-label">СВЯЗЬ</div>
+<a class="nav-item" data-page="messages"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>Сообщения <span id="messagesBadge" style="display:none; background:#F5B51B; color:#0B0D0F; border-radius:50%; padding:2px 8px; font-size:10px; font-weight:700; margin-left:6px;">0</span></span></a>
+</div>
+<div class="nav-group"><div class="nav-group-label">СИСТЕМА</div>
+<a class="nav-item" data-page="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/></svg><span>Настройки</span></a>
+</div>
+<div class="user-section">
+<div class="user-avatar" id="userAvatar">Г</div>
+<div><div class="user-name" id="userName">Гость</div><div class="user-role" id="userRole">Не авторизован</div></div>
+</div>
+</aside>
 
-// Actions
-html += '<div class="route-actions">';
-var isShipper = currentUser.id === m.shipper_id;
-var isCarrier = currentUser.id === m.carrier_id;
+<main class="main" id="mainContent">
+<div id="authRequired" style="display:flex; flex-direction:column; align-items:center; justify-content:center; height:80vh; text-align:center;">
+<h1 style="font-size:48px; margin-bottom:16px;">🚛 CargoThink</h1>
+<p style="color:#888B93; font-size:18px; margin-bottom:32px;">Войдите или зарегистрируйтесь</p>
+<div style="display:flex; gap:16px;">
+<button class="btn btn-primary" onclick="showLogin()">Войти</button>
+<button class="btn btn-secondary" onclick="showRegister()">Регистрация</button>
+</div>
+</div>
+<div id="dashboardContent" style="display:none;">
+<div id="page-overview" class="page-content active"></div>
+<div id="page-cargo" class="page-content"></div>
+<div id="page-transport" class="page-content"></div>
+<div id="page-routes" class="page-content"></div>
+<div id="page-messages" class="page-content"></div>
+<div id="page-settings" class="page-content"></div>
+</div>
+</main>
 
-if (m.status === 'pending') {
-    if (isCarrier) html += '<button class="btn btn-primary" onclick="acceptMatch(\'' + m.id + '\')">✅ Принять рейс</button>';
-    if (isShipper) html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание перевозчика. Найдите подходящего в разделе "Грузы" → "Совпадения"</div>';
-    html += '<button class="btn btn-secondary" onclick="declineMatch(\'' + m.id + '\')">❌ Отклонить</button>';
-}
-else if (m.status === 'accepted' && isShipper && !m.escrow_status_check) {
-    html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить в Escrow (' + (m.cargo_price ? m.cargo_price.toLocaleString() : '0') + ' ₽)</button>';
-    html += '<button class="btn btn-secondary" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
-}
-else if (m.status === 'accepted' && isCarrier) {
-    if (m.escrow_status_check === 'held') {
-        html += '<button class="btn btn-primary" onclick="startRoute(\'' + m.id + '\')">🚀 Начать рейс</button>';
+<div class="modal-overlay" id="loginModal"><div class="modal"><div class="modal-header"><h2>Вход</h2><button class="close" onclick="closeModal('loginModal')">×</button></div><div class="form-group"><label>Email</label><input class="input" id="loginEmail"></div><div class="form-group"><label>Пароль</label><input class="input" id="loginPassword" type="password"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('loginModal')">Отмена</button><button class="btn btn-primary" onclick="handleLogin()">Войти</button></div></div></div>
+
+<div class="modal-overlay" id="registerModal"><div class="modal"><div class="modal-header"><h2>Регистрация</h2><button class="close" onclick="closeModal('registerModal')">×</button></div><div class="form-group"><label>Имя</label><input class="input" id="regName"></div><div class="form-group"><label>Email</label><input class="input" id="regEmail"></div><div class="form-group"><label>Пароль</label><input class="input" id="regPassword" type="password"></div><div class="form-group"><label>Роль</label><select class="input" id="regRole"><option value="shipper">Грузоотправитель</option><option value="carrier">Перевозчик</option></select></div><div class="form-group"><label>Компания</label><input class="input" id="regCompany"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('registerModal')">Отмена</button><button class="btn btn-primary" onclick="handleRegister()">Зарегистрироваться</button></div></div></div>
+
+<div class="modal-overlay" id="cargoModal"><div class="modal"><div class="modal-header"><h2>📦 Новый груз</h2><button class="close" onclick="closeModal('cargoModal')">×</button></div><div class="form-grid"><div class="form-group"><label>Откуда (город)</label><input class="input" id="cargoOrigin" placeholder="Москва"></div><div class="form-group"><label>Куда (город)</label><input class="input" id="cargoDest" placeholder="Уфа"></div><div class="form-group full"><label>Адрес отправления</label><input class="input" id="cargoOriginAddress" placeholder="ул. Тверская, д. 1"></div><div class="form-group full"><label>Адрес доставки</label><input class="input" id="cargoDestAddress" placeholder="ул. Баумана, д. 10"></div><div class="form-group"><label>Вес (т)</label><input class="input" id="cargoWeight" type="number"></div><div class="form-group"><label>Тип</label><select class="input" id="cargoType"><option value="refrigerated">Рефрижератор</option><option value="van">Фургон</option><option value="open">Открытый</option><option value="isothermal">Изотерм</option></select></div><div class="form-group"><label>Дата загрузки</label><input class="input" id="cargoPickup" type="date"></div><div class="form-group"><label>Цена (₽)</label><input class="input" id="cargoPrice" type="number"></div><div class="form-group full"><label>Описание</label><textarea class="input" id="cargoDesc" rows="2"></textarea></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('cargoModal')">Отмена</button><button class="btn btn-primary" onclick="submitCargo()">Опубликовать</button></div></div></div>
+
+<div class="modal-overlay" id="transportModal"><div class="modal"><div class="modal-header"><h2>🚛 Новый транспорт</h2><button class="close" onclick="closeModal('transportModal')">×</button></div><div class="form-grid"><div class="form-group"><label>Где сейчас</label><input class="input" id="transportLocation" placeholder="Москва"></div><div class="form-group"><label>Тип ТС</label><select class="input" id="transportType"><option value="refrigerated">Рефрижератор</option><option value="van">Фургон</option><option value="open">Открытый</option><option value="isothermal">Изотерм</option></select></div><div class="form-group"><label>Грузоподъемность (т)</label><input class="input" id="transportCapacity" type="number"></div><div class="form-group"><label>Цена за км (₽)</label><input class="input" id="transportPrice" type="number"></div><div class="form-group"><label>Свободен с</label><input class="input" id="transportAvailable" type="date"></div><div class="form-group full"><label>Описание</label><textarea class="input" id="transportDesc" rows="2"></textarea></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('transportModal')">Отмена</button><button class="btn btn-primary" onclick="submitTransport()">Опубликовать</button></div></div></div>
+
+<div class="modal-overlay" id="ratingModal"><div class="modal"><div class="modal-header"><h2>⭐ Оцените поездку</h2><button class="close" onclick="closeModal('ratingModal')">×</button></div><div class="form-group"><label>Оценка (1-5)</label><select class="input" id="ratingValue"><option value="5">⭐⭐⭐⭐⭐ Отлично</option><option value="4">⭐⭐⭐⭐ Хорошо</option><option value="3">⭐⭐⭐ Нормально</option><option value="2">⭐⭐ Плохо</option><option value="1">⭐ Ужасно</option></select></div><div class="form-group"><label>Комментарий</label><textarea class="input" id="ratingComment" rows="3"></textarea></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('ratingModal')">Отмена</button><button class="btn btn-primary" onclick="submitRating()">Отправить</button></div></div></div>
+
+<script>
+let token = localStorage.getItem('cargothink_token');
+let currentUser = JSON.parse(localStorage.getItem('cargothink_user') || 'null');
+let currentMatchId = null;
+let currentOtherUserId = null;
+let currentRatingMatchId = null;
+let pollInterval = null;
+
+function updateUserInfo() {
+    if (currentUser && currentUser.full_name) {
+        document.getElementById('userName').textContent = currentUser.full_name;
+        document.getElementById('userRole').textContent = currentUser.role === 'shipper' ? 'Грузоотправитель' : 'Перевозчик';
+        document.getElementById('userAvatar').textContent = currentUser.full_name.charAt(0).toUpperCase();
     } else {
-        html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание оплаты от грузоотправителя</div>';
+        document.getElementById('userName').textContent = 'Гость';
+        document.getElementById('userRole').textContent = 'Не авторизован';
+        document.getElementById('userAvatar').textContent = 'Г';
     }
-    html += '<button class="btn btn-secondary" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
-}
-else if (m.status === 'in_transit' && isCarrier) {
-    html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'pickup\')">📍 Погрузка</button>';
-    html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'delivery\')">📍 Доставка</button>';
-    html += '<button class="btn btn-success" onclick="confirmDelivery(\'' + m.id + '\')">✅ Доставлено</button>';
-}
-else if (m.status === 'in_transit' && isShipper) {
-    html += '<div style="flex-basis:100%;padding:12px;color:#F5B51B;font-size:13px;">🚛 Груз в пути. Ожидайте доставки.</div>';
-    html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Открыть спор</button>';
-}
-else if (m.status === 'delivered_by_carrier' && isShipper) {
-    html += '<button class="btn btn-success" onclick="confirmReceipt(\'' + m.id + '\')">✅ Подтвердить получение</button>';
-    html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Проблема</button>';
-    html += '<div style="flex-basis:100%;padding:12px;color:#888B93;font-size:12px;">После подтверждения оплата уйдёт перевозчику. Если что-то не так — откройте спор.</div>';
-}
-else if (m.status === 'delivered_by_carrier' && isCarrier) {
-    html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">✅ Доставлено. Ожидайте подтверждения от грузоотправителя.</div>';
-}
-else if (m.status === 'delivered') {
-    html += '<button class="btn btn-secondary" onclick="openRatingModal(\'' + m.id + '\')">⭐ Оценить</button>';
 }
 
-html += '<button class="btn btn-secondary" onclick="openChatFromMatch(\'' + m.id + '\', \'' + (isShipper ? m.carrier_id : m.shipper_id) + '\', \'' + (isShipper ? m.carrier_name : m.shipper_name) + '\')">💬 Чат</button>';
-html += '</div></div>';
+async function apiCall(endpoint, method, body) {
+    method = method || 'GET';
+    var headers = { 'Content-Type': 'application/json' };
+    if (token) headers['Authorization'] = 'Bearer ' + token;
+    var options = { method: method, headers: headers };
+    if (body) options.body = JSON.stringify(body);
+    var response = await fetch('/api' + endpoint, options);
+    var data = await response.json();
+    if (!response.ok) {
+        if (response.status === 401) {
+            localStorage.removeItem('cargothink_token');
+            localStorage.removeItem('cargothink_user');
+            token = null; currentUser = null;
+            showAuthRequired();
+            throw new Error('Сессия истекла');
+        }
+        throw new Error(data.error || 'Ошибка');
+    }
+    return data;
+}
+
+function showToast(title, message, isError) {
+    var existing = document.querySelector('.toast');
+    if (existing) existing.remove();
+    var toast = document.createElement('div');
+    toast.className = 'toast';
+    var borderColor = isError ? '#F87171' : '#F5B51B';
+    toast.style.borderColor = borderColor;
+    toast.innerHTML = '<strong style="color:' + borderColor + ';">' + title + '</strong><p style="color:#888B93;font-size:14px;margin-top:4px;">' + message + '</p>';
+    document.body.appendChild(toast);
+    setTimeout(function() { if (toast.parentNode) toast.remove(); }, 4000);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+function showLogin() { openModal('loginModal'); }
+function showRegister() { openModal('registerModal'); }
+
+async function handleLogin() {
+    var email = document.getElementById('loginEmail').value.trim();
+    var password = document.getElementById('loginPassword').value;
+    if (!email || !password) { showToast('Ошибка', 'Заполните поля', true); return; }
+    try {
+        var data = await apiCall('/auth/login', 'POST', { email: email, password: password });
+        token = data.token;
+        currentUser = data.user;
+        localStorage.setItem('cargothink_token', token);
+        localStorage.setItem('cargothink_user', JSON.stringify(currentUser));
+        closeModal('loginModal');
+        showToast('Добро пожаловать', 'Привет, ' + currentUser.full_name);
+        updateUserInfo();
+        showDashboardUI();
+        navigateTo('overview');
+    } catch (err) { showToast('Ошибка входа', err.message, true); }
+}
+
+async function handleRegister() {
+    var full_name = document.getElementById('regName').value.trim();
+    var email = document.getElementById('regEmail').value.trim();
+    var password = document.getElementById('regPassword').value;
+    var role = document.getElementById('regRole').value;
+    var company_name = document.getElementById('regCompany').value.trim();
+    if (!full_name || !email || !password) { showToast('Ошибка', 'Заполните поля', true); return; }
+    if (password.length < 6) { showToast('Ошибка', 'Пароль мин. 6 символов', true); return; }
+    try {
+        var data = await apiCall('/auth/register', 'POST', { email: email, password: password, full_name: full_name, company_name: company_name, role: role });
+        token = data.token;
+        currentUser = data.user;
+        localStorage.setItem('cargothink_token', token);
+        localStorage.setItem('cargothink_user', JSON.stringify(currentUser));
+        closeModal('registerModal');
+        showToast('Успех', 'Добро пожаловать!');
+        updateUserInfo();
+        showDashboardUI();
+        navigateTo('overview');
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+function logout() {
+    localStorage.removeItem('cargothink_token');
+    localStorage.removeItem('cargothink_user');
+    token = null; currentUser = null;
+    showAuthRequired();
+    updateUserInfo();
+}
+
+function showAuthRequired() {
+    document.getElementById('authRequired').style.display = 'flex';
+    document.getElementById('dashboardContent').style.display = 'none';
+    updateUserInfo();
+}
+
+function showDashboardUI() {
+    document.getElementById('authRequired').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+    updateUserInfo();
+}
+
+function navigateTo(page) {
+    stopMessagePolling();
+    document.querySelectorAll('.page-content').forEach(function(el) { el.classList.remove('active'); });
+    var target = document.getElementById('page-' + page);
+    if (target) target.classList.add('active');
+    document.querySelectorAll('.sidebar .nav-item').forEach(function(item) {
+        item.classList.remove('active');
+        if (item.dataset.page === page) item.classList.add('active');
+    });
+    if (page === 'overview') loadOverview();
+    else if (page === 'cargo') loadCargoPage();
+    else if (page === 'transport') loadTransportPage();
+    else if (page === 'routes') loadRoutes();
+    else if (page === 'messages') loadMessages();
+    else if (page === 'settings') loadSettings();
+}
+
+document.addEventListener('click', function(e) {
+    const item = e.target.closest('.sidebar .nav-item');
+    if (item && item.dataset.page) { e.preventDefault(); navigateTo(item.dataset.page); }
+});
+
+// === OVERVIEW ===
+function loadOverview() {
+    document.getElementById('page-overview').innerHTML = '<div class="main-header"><h1><span>Обзор</span></h1><div class="header-actions"><button class="btn btn-primary" onclick="openCargoModal()">+ Новый груз</button><button class="btn btn-secondary" onclick="openTransportModal()">+ Новый транспорт</button></div></div><div class="stats"><div class="stat-card"><div class="label">Активные</div><div class="value" id="statActive">—</div></div><div class="stat-card"><div class="label">Открытые грузы</div><div class="value" id="statCargo">—</div></div><div class="stat-card"><div class="label">Доступный транспорт</div><div class="value" id="statTransport">—</div></div><div class="stat-card"><div class="label">Завершено</div><div class="value" id="statCompletion">—</div></div></div><div class="intel-section"><span class="badge">🧠 CargoThink Intelligence</span><h3 id="intelTitle">Анализ совпадений...</h3><div class="sub" id="intelSub">Поиск оптимальных вариантов</div><div class="intel-grid" id="intelGrid"><div class="loading"><div class="spinner"></div></div></div></div>';
+    loadDashboardData();
+}
+
+async function loadDashboardData() {
+    try {
+        var stats = await apiCall('/stats');
+        document.getElementById('statActive').textContent = stats.pending_matches || 0;
+        document.getElementById('statCargo').textContent = stats.open_cargo || 0;
+        document.getElementById('statTransport').textContent = stats.available_transport || 0;
+        document.getElementById('statCompletion').textContent = stats.completed_shipments || 0;
+    } catch (err) { console.error(err); }
+    loadMatches();
+}
+
+async function loadMatches() {
+    try {
+        var matches = await apiCall('/matches');
+        var grid = document.getElementById('intelGrid');
+        var title = document.getElementById('intelTitle');
+        if (!grid) return;
+        var pending = matches.filter(function(m) { return m.status === 'pending'; });
+        if (pending.length === 0) {
+            if (title) title.textContent = 'Нет доступных совпадений';
+            grid.innerHTML = '<div style="text-align:center;color:#888B93;padding:20px;">Пока ничего нет.</div>';
+            return;
+        }
+        if (title) title.textContent = pending.length + ' совпадений найдено';
+        var html = '';
+        for (var i = 0; i < Math.min(pending.length, 6); i++) {
+            var m = pending[i];
+            var shipperRating = m.shipper_rating ? parseFloat(m.shipper_rating).toFixed(1) : '0.0';
+            var carrierRating = m.carrier_rating ? parseFloat(m.carrier_rating).toFixed(1) : '0.0';
+            html += '<div class="intel-card">';
+            html += '<div class="route">' + (m.origin_city || '—') + ' → ' + (m.dest_city || '—') + '<small>' + (m.weight_kg || 0) + ' т · ' + (m.cargo_type || '—') + '</small></div>';
+            html += '<span class="match">' + Math.round(m.match_score || 0) + '% совпадение</span>';
+            html += '<div class="detail">👤 ' + (m.shipper_name || '—') + ' ⭐ ' + shipperRating + (m.shipper_verified ? ' ✅' : '') + '</div>';
+            html += '<div class="detail">🚛 ' + (m.carrier_name || '—') + ' ⭐ ' + carrierRating + '</div>';
+            html += '<div class="price">' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() + ' ₽' : '—') + '</div>';
+            html += '<button class="btn btn-primary btn-sm" style="margin-top:10px; width:100%;" onclick="acceptMatch(\'' + m.id + '\')">Принять</button>';
+            html += '</div>';
+        }
+        grid.innerHTML = html;
+    } catch (err) { console.error(err); }
+}
+
+async function acceptMatch(matchId) {
+    try {
+        await apiCall('/matches/' + matchId + '/accept', 'POST');
+        showToast('Успех', 'Рейс принят!');
+        navigateTo('routes');
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+// === CARGO ===
+function loadCargoPage() {
+    document.getElementById('page-cargo').innerHTML = '<div class="main-header"><h1><span>Грузы</span></h1><button class="btn btn-primary" onclick="openCargoModal()">+ Добавить</button></div><div id="cargoList"><div class="loading"><div class="spinner"></div></div></div>';
+    loadCargoList();
+}
+
+async function loadCargoList() {
+    try {
+        var cargo = await apiCall('/cargo');
+        var container = document.getElementById('cargoList');
+        if (cargo.length === 0) { container.innerHTML = '<div class="empty-state"><h3>Нет грузов</h3><p>Создайте первый груз</p></div>'; return; }
+        var html = '';
+        for (var i = 0; i < cargo.length; i++) {
+            var c = cargo[i];
+            var statusText = 'Открыт';
+            var statusColor = '#4ADE80';
+            if (c.active_matches > 0) { statusText = 'Перевозчик найден'; statusColor = '#60A5FA'; }
+            else if (c.shipping_matches > 0) { statusText = 'В пути'; statusColor = '#F5B51B'; }
+            else if (c.completed_matches > 0) { statusText = 'Доставлено'; statusColor = '#22c55e'; }
+            else if (c.pending_matches > 0) { statusText = 'Ищем перевозчика (' + c.pending_matches + ' совпадений)'; statusColor = '#FBBF24'; }
+            
+            html += '<div class="card">';
+            html += '<div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;">';
+            html += '<div><div style="font-size:18px; font-weight:700; margin-bottom:6px;">' + c.origin_city + ' → ' + c.dest_city + '</div>';
+            if (c.origin_address) html += '<div style="font-size:13px; color:#888B93;">📍 ' + c.origin_address + '</div>';
+            if (c.dest_address) html += '<div style="font-size:13px; color:#888B93;">🎯 ' + c.dest_address + '</div>';
+            html += '<div style="margin-top:10px; font-size:13px; color:#888B93;">📦 ' + c.weight_kg + ' т · ' + c.cargo_type + ' · 📅 ' + (c.pickup_date || '—') + '</div>';
+            html += '<div style="margin-top:8px;"><span class="status-pill" style="background:' + statusColor + '22;color:' + statusColor + ';">' + statusText + '</span></div>';
+            html += '</div>';
+            html += '<div style="text-align:right;"><div style="font-size:22px; font-weight:800; color:#F5B51B;">' + (c.price ? parseFloat(c.price).toLocaleString() + ' ₽' : '—') + '</div></div>';
+            html += '</div></div>';
+        }
+        container.innerHTML = html;
+    } catch (err) { console.error(err); }
+}
+
+function openCargoModal() { openModal('cargoModal'); }
+
+async function submitCargo() {
+    var origin = document.getElementById('cargoOrigin').value.trim();
+    var dest = document.getElementById('cargoDest').value.trim();
+    var originAddress = document.getElementById('cargoOriginAddress').value.trim();
+    var destAddress = document.getElementById('cargoDestAddress').value.trim();
+    var weight = parseInt(document.getElementById('cargoWeight').value);
+    var type = document.getElementById('cargoType').value;
+    var pickup = document.getElementById('cargoPickup').value;
+    var price = parseInt(document.getElementById('cargoPrice').value);
+    var desc = document.getElementById('cargoDesc').value.trim();
+    if (!origin || !dest || !weight || !pickup || !price) { showToast('Ошибка', 'Заполните поля', true); return; }
+    try {
+        await apiCall('/cargo', 'POST', { origin_city: origin, dest_city: dest, origin_address: originAddress || null, dest_address: destAddress || null, weight_kg: weight, cargo_type: type, pickup_date: pickup, delivery_date: null, price: price, description: desc || null });
+        closeModal('cargoModal');
+        showToast('Успех', 'Груз опубликован!');
+        navigateTo('cargo');
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+// === TRANSPORT ===
+function loadTransportPage() {
+    document.getElementById('page-transport').innerHTML = '<div class="main-header"><h1><span>Транспорт</span></h1><button class="btn btn-primary" onclick="openTransportModal()">+ Добавить</button></div><div id="transportList"><div class="loading"><div class="spinner"></div></div></div>';
+    loadTransportList();
+}
+
+async function loadTransportList() {
+    try {
+        var transport = await apiCall('/transport');
+        var container = document.getElementById('transportList');
+        if (transport.length === 0) { container.innerHTML = '<div class="empty-state"><h3>Нет транспорта</h3><p>Добавьте транспортное средство</p></div>'; return; }
+        var html = '';
+        for (var i = 0; i < transport.length; i++) {
+            var t = transport[i];
+            html += '<div class="card"><div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;"><div><div style="font-size:18px; font-weight:700; margin-bottom:6px;">🚛 ' + t.current_city + '</div><div style="font-size:13px; color:#888B93;">' + t.capacity_kg + ' т · ' + t.vehicle_type + ' · 📅 ' + t.available_from + '</div><div style="font-size:13px; color:#888B93; margin-top:4px;">👤 ' + (t.carrier_name || '—') + '</div></div><div style="text-align:right;"><div style="font-size:18px; font-weight:700; color:#4ADE80;">' + (t.price_per_km || '—') + ' ₽/км</div></div></div></div>';
+        }
+        container.innerHTML = html;
+    } catch (err) { console.error(err); }
+}
+
+function openTransportModal() { openModal('transportModal'); }
+
+async function submitTransport() {
+    var loc = document.getElementById('transportLocation').value.trim();
+    var type = document.getElementById('transportType').value;
+    var cap = parseInt(document.getElementById('transportCapacity').value);
+    var price = parseFloat(document.getElementById('transportPrice').value);
+    var avail = document.getElementById('transportAvailable').value;
+    var desc = document.getElementById('transportDesc').value.trim();
+    if (!loc || !cap || !avail) { showToast('Ошибка', 'Заполните поля', true); return; }
+    try {
+        await apiCall('/transport', 'POST', { current_city: loc, capacity_kg: cap, vehicle_type: type, available_from: avail, price_per_km: price || null, description: desc || null });
+        closeModal('transportModal');
+        showToast('Успех', 'Транспорт добавлен!');
+        navigateTo('transport');
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+// === ROUTES ===
+function loadRoutes() {
+    document.getElementById('page-routes').innerHTML = '<div class="main-header"><h1><span>Маршруты</span></h1></div><div class="routes-container" id="routesContainer"><div class="loading"><div class="spinner"></div></div></div>';
+    loadRoutesData();
+}
+
+async function loadRoutesData() {
+    try {
+        var matches = await apiCall('/matches');
+        var container = document.getElementById('routesContainer');
+        var active = matches.filter(function(m) { return ['pending', 'accepted', 'in_transit', 'delivered_by_carrier', 'delivered'].indexOf(m.status) !== -1; });
+        if (active.length === 0) {
+            container.innerHTML = '<div class="empty-state"><h3>Нет активных маршрутов</h3><p>Примите совпадение или создайте груз/транспорт</p></div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < active.length; i++) {
+            var m = active[i];
+            html += '<div class="route-card">';
+            html += '<div class="route-header"><div>';
+            html += '<div class="route-title">' + (m.origin_city || '—') + ' → ' + (m.dest_city || '—') + '</div>';
+            if (m.origin_address) html += '<div class="route-subtitle">📍 ' + m.origin_address + '</div>';
+            if (m.dest_address) html += '<div class="route-subtitle">🎯 ' + m.dest_address + '</div>';
+            html += '</div>';
+            var statusText = { 'pending': 'Ожидает', 'accepted': 'Принят', 'in_transit': 'В пути', 'delivered_by_carrier': 'Доставлено (ждём подтв.)', 'delivered': 'Завершён' };
+            html += '<span class="route-status-badge status-' + m.status + '">' + (statusText[m.status] || m.status) + '</span>';
+            html += '</div>';
+            
+            html += '<div class="route-info-grid">';
+            html += '<div class="route-info-item"><div class="lbl">Груз</div><div class="val">' + (m.weight_kg || 0) + ' т · ' + (m.cargo_type || '—') + '</div></div>';
+            html += '<div class="route-info-item"><div class="lbl">Цена</div><div class="val price">' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() : '0') + ' ₽</div></div>';
+            html += '<div class="route-info-item"><div class="lbl">Грузоотправитель</div><div class="val">' + (m.shipper_name || '—') + ' <span class="rating-badge">⭐ ' + (m.shipper_rating ? parseFloat(m.shipper_rating).toFixed(1) : '0.0') + '</span>' + (m.shipper_verified ? '<span class="verified-badge">✅</span>' : '') + '</div></div>';
+            html += '<div class="route-info-item"><div class="lbl">Перевозчик</div><div class="val">' + (m.carrier_name || '—') + ' <span class="rating-badge">⭐ ' + (m.carrier_rating ? parseFloat(m.carrier_rating).toFixed(1) : '0.0') + '</span></div></div>';
+            html += '</div>';
+            
+            if (m.escrow_status_check) {
+                html += '<div class="cost-breakdown">';
+                var escrowStatusText = m.escrow_status_check === 'held' ? '🔒 Зарезервировано' : m.escrow_status_check === 'released' ? '✅ Выплачено' : m.escrow_status_check === 'refunded' ? '↩️ Возврат' : m.escrow_status_check === 'disputed' ? '⚠️ Спор' : m.escrow_status_check;
+                html += '<div class="cost-row total"><span>💰 Оплата в Escrow <small style="color:#4ADE80;">(' + escrowStatusText + ')</small></span><span>' + (m.escrow_amount ? parseFloat(m.escrow_amount).toLocaleString() + ' ₽' : '—') + '</span></div>';
+                if (m.driver_pay) html += '<div class="cost-row driver"><span>Водитель</span><span>' + parseFloat(m.driver_pay).toLocaleString() + ' ₽</span></div>';
+                if (m.fuel) html += '<div class="cost-row fuel"><span>Топливо</span><span>' + parseFloat(m.fuel).toLocaleString() + ' ₽</span></div>';
+                if (m.tolls) html += '<div class="cost-row tolls"><span>Платные дороги</span><span>' + parseFloat(m.tolls).toLocaleString() + ' ₽</span></div>';
+                if (m.platform_fee) html += '<div class="cost-row fee"><span>Комиссия сервиса</span><span>' + parseFloat(m.platform_fee).toLocaleString() + ' ₽</span></div>';
+                html += '</div>';
+            }
+            
+            html += '<div class="route-actions">';
+            var isShipper = currentUser.id === m.shipper_id;
+            var isCarrier = currentUser.id === m.carrier_id;
+            
+            if (m.status === 'pending') {
+                if (isCarrier) html += '<button class="btn btn-primary" onclick="acceptMatch(\'' + m.id + '\')">✅ Принять рейс</button>';
+                if (isShipper) html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание перевозчика</div>';
+                html += '<button class="btn btn-secondary" onclick="declineMatch(\'' + m.id + '\')">❌ Отклонить</button>';
+            }
+            else if (m.status === 'accepted' && isShipper && !m.escrow_status_check) {
+                html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить в Escrow (' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() : '0') + ' ₽)</button>';
+                html += '<button class="btn btn-secondary" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
+            }
+            else if (m.status === 'accepted' && isCarrier) {
+                if (m.escrow_status_check === 'held') {
+                    html += '<button class="btn btn-primary" onclick="startRoute(\'' + m.id + '\')">🚀 Начать рейс</button>';
+                } else {
+                    html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание оплаты от грузоотправителя</div>';
+                }
+                html += '<button class="btn btn-secondary" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
+            }
+            else if (m.status === 'in_transit' && isCarrier) {
+                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'pickup\')">📍 Погрузка</button>';
+                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'delivery\')">📍 Доставка</button>';
+                html += '<button class="btn btn-success" onclick="confirmDelivery(\'' + m.id + '\')">✅ Доставлено</button>';
+            }
+            else if (m.status === 'in_transit' && isShipper) {
+                html += '<div style="flex-basis:100%;padding:12px;color:#F5B51B;font-size:13px;">🚛 Груз в пути. Ожидайте доставки.</div>';
+                html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Открыть спор</button>';
+            }
+            else if (m.status === 'delivered_by_carrier' && isShipper) {
+                html += '<button class="btn btn-success" onclick="confirmReceipt(\'' + m.id + '\')">✅ Подтвердить получение</button>';
+                html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Проблема</button>';
+                html += '<div style="flex-basis:100%;padding:12px;color:#888B93;font-size:12px;">После подтверждения оплата уйдёт перевозчику. Если что-то не так — откройте спор.</div>';
+            }
+            else if (m.status === 'delivered_by_carrier' && isCarrier) {
+                html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">✅ Доставлено. Ожидайте подтверждения от грузоотправителя.</div>';
+            }
+            else if (m.status === 'delivered') {
+                html += '<button class="btn btn-secondary" onclick="openRatingModal(\'' + m.id + '\')">⭐ Оценить</button>';
+            }
+            
+            html += '<button class="btn btn-secondary" onclick="openChatFromMatch(\'' + m.id + '\', \'' + (isShipper ? m.carrier_id : m.shipper_id) + '\', \'' + (isShipper ? m.carrier_name : m.shipper_name) + '\')">💬 Чат</button>';
+            html += '</div></div>';
+        }
+        container.innerHTML = html;
+    } catch (err) { console.error('Load routes error:', err); }
+}
+
+async function declineMatch(matchId) {
+    try { await apiCall('/matches/' + matchId + '/decline', 'POST'); showToast('Успех', 'Отклонено'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function cancelMatch(matchId) {
+    if (!confirm('Отменить рейс?')) return;
+    try { await apiCall('/matches/' + matchId + '/cancel', 'POST'); showToast('Успех', 'Отменено'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function depositEscrow(matchId) {
+    if (!confirm('Оплатить в Escrow? Деньги будут зарезервированы до подтверждения доставки.')) return;
+    try {
+        var result = await apiCall('/escrow/deposit', 'POST', { match_id: matchId, payment_method: 'manual' });
+        showToast('Успех', 'Оплачено ' + parseFloat(result.amount).toLocaleString() + ' ₽ в Escrow');
+        loadRoutesData();
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function startRoute(matchId) {
+    try { await apiCall('/matches/' + matchId + '/start', 'POST'); showToast('Успех', 'Рейс начат'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function checkIn(matchId, type) {
+    var lat = null, lng = null;
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(pos) { lat = pos.coords.latitude; lng = pos.coords.longitude; });
+    }
+    try {
+        await apiCall('/checkins/' + matchId, 'POST', { type: type, lat: lat, lng: lng });
+        showToast('Успех', 'Отметка добавлена');
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function confirmDelivery(matchId) {
+    if (!confirm('Подтвердите доставку груза')) return;
+    try { await apiCall('/matches/' + matchId + '/delivered', 'POST'); showToast('Успех', 'Ожидайте подтверждения'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function confirmReceipt(matchId) {
+    if (!confirm('Подтвердить получение? Оплата уйдёт перевозчику.')) return;
+    try { await apiCall('/matches/' + matchId + '/confirm', 'POST'); showToast('Успех', 'Оплата отпущена перевозчику'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+function openDispute(matchId) {
+    var reason = prompt('Опишите проблему (мин. 10 символов):');
+    if (!reason || reason.length < 10) { showToast('Ошибка', 'Слишком коротко', true); return; }
+    apiCall('/disputes', 'POST', { match_id: matchId, reason: reason })
+        .then(function() {
+            showToast('Спор открыт', 'Деньги заморожены до решения');
+            loadRoutesData();
+        })
+        .catch(function(err) { showToast('Ошибка', err.message, true); });
+}
+
+function openRatingModal(matchId) {
+    currentRatingMatchId = matchId;
+    openModal('ratingModal');
+}
+
+async function submitRating() {
+    var rating = parseInt(document.getElementById('ratingValue').value);
+    var comment = document.getElementById('ratingComment').value.trim();
+    try {
+        await apiCall('/ratings', 'POST', { match_id: currentRatingMatchId, rating: rating, comment: comment });
+        closeModal('ratingModal');
+        showToast('Спасибо', 'Оценка отправлена');
+        loadRoutesData();
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+// === MESSAGES ===
+function loadMessages() {
+    document.getElementById('page-messages').innerHTML = '<div class="main-header"><h1><span>Сообщения</span></h1></div><div style="display:grid; grid-template-columns:300px 1fr; gap:20px; min-height:500px;"><div class="card" style="padding:0;"><div style="padding:16px 20px; border-bottom:1px solid #25292D; font-weight:700;">💬 Чаты</div><div id="conversationsList" style="max-height:500px; overflow-y:auto;"></div></div><div class="card" style="display:flex; flex-direction:column; padding:0;"><div id="chatHeader" style="padding:16px 20px; border-bottom:1px solid #25292D;"><div style="color:#888B93; text-align:center;">Выберите чат</div></div><div id="chatMessages" style="flex:1; overflow-y:auto; padding:16px 20px; min-height:300px;"></div><div style="padding:16px 20px; border-top:1px solid #25292D; display:flex; gap:10px;"><input type="text" id="chatInput" placeholder="Сообщение..." style="flex:1; padding:10px; background:#0B0D0F; border:1px solid #25292D; border-radius:6px; color:#fff;"><button class="btn btn-primary" onclick="sendMessage()" id="sendMessageBtn" disabled>Отправить</button></div></div></div>';
+    loadConversations();
+    startMessagePolling();
+}
+
+async function loadConversations() {
+    try {
+        var conversations = await apiCall('/messages/conversations');
+        var list = document.getElementById('conversationsList');
+        if (!list) return;
+        if (conversations.length === 0) { list.innerHTML = '<div style="text-align:center; color:#888B93; padding:40px 20px;">Нет чатов</div>'; return; }
+        var html = '';
+        for (var i = 0; i < conversations.length; i++) {
+            var c = conversations[i];
+            var unread = c.unread_count > 0 ? ' <span style="background:#F5B51B; color:#0B0D0F; border-radius:50%; padding:2px 8px; font-size:10px; font-weight:700;">' + c.unread_count + '</span>' : '';
+            html += '<div onclick="openChat(\'' + c.match_id + '\', \'' + c.other_user_id + '\', \'' + c.other_user_name + '\')" style="padding:12px 20px; cursor:pointer; border-bottom:1px solid #1a1a1a;"><div style="font-weight:600; font-size:14px;">' + c.other_user_name + unread + '</div><div style="font-size:12px; color:#888B93; margin-top:4px;">' + c.origin_city + ' → ' + c.dest_city + '</div><div style="font-size:12px; color:#666; margin-top:2px;">' + (c.last_message || '').substring(0, 40) + '</div></div>';
+        }
+        list.innerHTML = html;
+    } catch (err) { console.error(err); }
+}
+
+function openChat(matchId, otherUserId, otherUserName) {
+    currentMatchId = matchId;
+    currentOtherUserId = otherUserId;
+    document.getElementById('chatHeader').innerHTML = '<strong>' + otherUserName + '</strong>';
+    document.getElementById('sendMessageBtn').disabled = false;
+    loadMessagesForMatch(matchId);
+    loadConversations();
+}
+
+async function loadMessagesForMatch(matchId) {
+    try {
+        var messages = await apiCall('/messages/' + matchId);
+        var container = document.getElementById('chatMessages');
+        if (!container) return;
+        if (messages.length === 0) { container.innerHTML = '<div style="text-align:center; color:#888B93; padding:40px;">Напишите первое сообщение</div>'; return; }
+        var html = '';
+        for (var i = 0; i < messages.length; i++) {
+            var m = messages[i];
+            var isMine = m.sender_id === currentUser.id;
+            var bg = isMine ? '#F5B51B' : '#1a1a1a';
+            var color = isMine ? '#0B0D0F' : '#F4F5F6';
+            html += '<div style="display:flex; justify-content: ' + (isMine ? 'flex-end' : 'flex-start') + '; margin-bottom:8px;"><div style="max-width:70%; background:' + bg + '; color:' + color + '; padding:10px 14px; border-radius:12px;">' + m.content + '</div></div>';
+        }
+        container.innerHTML = html;
+        container.scrollTop = container.scrollHeight;
+    } catch (err) { console.error(err); }
+}
+
+async function sendMessage() {
+    var input = document.getElementById('chatInput');
+    var content = input.value.trim();
+    if (!content || !currentMatchId || !currentOtherUserId) return;
+    try {
+        await apiCall('/messages', 'POST', { match_id: currentMatchId, receiver_id: currentOtherUserId, content: content });
+        input.value = '';
+        loadMessagesForMatch(currentMatchId);
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+function openChatFromMatch(matchId, otherUserId, otherUserName) {
+    navigateTo('messages');
+    setTimeout(function() { openChat(matchId, otherUserId, otherUserName); }, 500);
+}
+
+function startMessagePolling() {
+    if (pollInterval) clearInterval(pollInterval);
+    pollInterval = setInterval(function() {
+        if (currentMatchId && document.getElementById('chatMessages')) {
+            loadMessagesForMatch(currentMatchId);
+            loadConversations();
+        }
+    }, 5000);
+}
+
+function stopMessagePolling() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+}
+
+// === SETTINGS ===
+function loadSettings() {
+    document.getElementById('page-settings').innerHTML = '<div class="main-header"><h1><span>Настройки</span></h1></div><div class="card"><h3>👤 Профиль</h3><div style="padding:20px;"><div class="form-group"><label>Имя</label><input class="input" value="' + (currentUser ? currentUser.full_name : '') + '" disabled></div><div class="form-group"><label>Email</label><input class="input" value="' + (currentUser ? currentUser.email : '') + '" disabled></div><div class="form-group"><label>Роль</label><input class="input" value="' + (currentUser && currentUser.role === 'shipper' ? 'Грузоотправитель' : 'Перевозчик') + '" disabled></div><div class="form-group"><label>Рейтинг</label><input class="input" value="⭐ ' + (currentUser ? (currentUser.rating || 0) : 0) + ' / 5.0" disabled></div><button class="btn btn-danger" onclick="logout()" style="margin-top:12px;">Выйти</button></div></div>';
+}
+
+// === ENTER KEY ===
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter' && document.activeElement && document.activeElement.id === 'chatInput') { e.preventDefault(); sendMessage(); }
+});
+
+// === INIT ===
+if (token && currentUser) {
+    showDashboardUI();
+    navigateTo('overview');
+} else {
+    showAuthRequired();
+}
+console.log('🚛 CargoThink v2.3 loaded');
+</script>
+</body>
+</html>
