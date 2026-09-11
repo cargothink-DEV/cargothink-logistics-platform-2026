@@ -28,6 +28,9 @@ CREATE TABLE IF NOT EXISTS cargo (
     pickup_date DATE NOT NULL,
     delivery_date DATE,
     price DECIMAL(12,2) NOT NULL,
+    base_price DECIMAL(12,2),
+    surge_multiplier DECIMAL(4,2) DEFAULT 1.0,
+    price_factors JSONB,
     status TEXT DEFAULT 'open',
     description TEXT,
     created_at TIMESTAMP DEFAULT NOW(),
@@ -36,6 +39,9 @@ CREATE TABLE IF NOT EXISTS cargo (
 
 ALTER TABLE cargo ADD COLUMN IF NOT EXISTS origin_address TEXT;
 ALTER TABLE cargo ADD COLUMN IF NOT EXISTS dest_address TEXT;
+ALTER TABLE cargo ADD COLUMN IF NOT EXISTS base_price DECIMAL(12,2);
+ALTER TABLE cargo ADD COLUMN IF NOT EXISTS surge_multiplier DECIMAL(4,2) DEFAULT 1.0;
+ALTER TABLE cargo ADD COLUMN IF NOT EXISTS price_factors JSONB;
 
 CREATE TABLE IF NOT EXISTS transport (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -150,6 +156,47 @@ CREATE TABLE IF NOT EXISTS tracking (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS fuel_prices (
+    id SERIAL PRIMARY KEY,
+    region TEXT DEFAULT 'russia',
+    price_per_liter DECIMAL(6,2) NOT NULL,
+    source TEXT DEFAULT 'manual',
+    recorded_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+INSERT INTO app_settings (key, value) VALUES 
+    ('diesel_price', '68'),
+    ('diesel_reference', '60'),
+    ('commission_rate', '0.10'),
+    ('surge_enabled', 'true')
+ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS shared_loads (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    primary_cargo_id UUID REFERENCES cargo(id) ON DELETE CASCADE,
+    status TEXT DEFAULT 'open',
+    total_weight_kg INTEGER DEFAULT 0,
+    combined_price DECIMAL(12,2) DEFAULT 0,
+    savings_percent DECIMAL(4,2) DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS shared_load_members (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    shared_load_id UUID REFERENCES shared_loads(id) ON DELETE CASCADE,
+    cargo_id UUID REFERENCES cargo(id) ON DELETE CASCADE,
+    shipper_id UUID REFERENCES users(id),
+    joined_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE(shared_load_id, cargo_id)
+);
+
 CREATE TABLE IF NOT EXISTS city_distances (
     id SERIAL PRIMARY KEY,
     city_a TEXT NOT NULL,
@@ -177,3 +224,4 @@ CREATE INDEX IF NOT EXISTS idx_transport_status ON transport(status);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
 CREATE INDEX IF NOT EXISTS idx_tracking_match_id ON tracking(match_id);
+CREATE INDEX IF NOT EXISTS idx_fuel_prices_date ON fuel_prices(recorded_at);
