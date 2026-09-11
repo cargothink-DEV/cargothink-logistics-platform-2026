@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS escrow (
     fuel DECIMAL(12,2),
     tolls DECIMAL(12,2),
     platform_fee DECIMAL(12,2),
+    commission_rate DECIMAL(5,4) DEFAULT 0.10,
     currency TEXT DEFAULT 'RUB',
     status TEXT DEFAULT 'held',
     payment_method TEXT,
@@ -96,6 +97,7 @@ CREATE TABLE IF NOT EXISTS escrow (
 
 ALTER TABLE escrow ADD COLUMN IF NOT EXISTS payment_method TEXT;
 ALTER TABLE escrow ADD COLUMN IF NOT EXISTS payment_reference TEXT;
+ALTER TABLE escrow ADD COLUMN IF NOT EXISTS commission_rate DECIMAL(5,4) DEFAULT 0.10;
 
 CREATE TABLE IF NOT EXISTS ratings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -136,18 +138,6 @@ CREATE TABLE IF NOT EXISTS disputes (
     resolution TEXT,
     resolved_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS payments (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
-    amount DECIMAL(12,2) NOT NULL,
-    currency TEXT DEFAULT 'RUB',
-    provider TEXT,
-    status TEXT DEFAULT 'pending',
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS tracking (
