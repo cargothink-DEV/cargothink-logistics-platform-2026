@@ -87,10 +87,15 @@ CREATE TABLE IF NOT EXISTS escrow (
     platform_fee DECIMAL(12,2),
     currency TEXT DEFAULT 'RUB',
     status TEXT DEFAULT 'held',
+    payment_method TEXT,
+    payment_reference TEXT,
     released_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
 );
+
+ALTER TABLE escrow ADD COLUMN IF NOT EXISTS payment_method TEXT;
+ALTER TABLE escrow ADD COLUMN IF NOT EXISTS payment_reference TEXT;
 
 CREATE TABLE IF NOT EXISTS ratings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -113,12 +118,33 @@ CREATE TABLE IF NOT EXISTS checkins (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS proofs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+    user_id UUID REFERENCES users(id),
+    type TEXT CHECK (type IN ('pickup', 'delivery')),
+    photo_url TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS disputes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
+    opened_by UUID REFERENCES users(id),
+    reason TEXT NOT NULL,
+    status TEXT DEFAULT 'open',
+    resolution TEXT,
+    resolved_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS payments (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id) ON DELETE CASCADE,
     match_id UUID REFERENCES matches(id) ON DELETE CASCADE,
     amount DECIMAL(12,2) NOT NULL,
     currency TEXT DEFAULT 'RUB',
+    provider TEXT,
     status TEXT DEFAULT 'pending',
     created_at TIMESTAMP DEFAULT NOW(),
     updated_at TIMESTAMP DEFAULT NOW()
@@ -134,17 +160,6 @@ CREATE TABLE IF NOT EXISTS tracking (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS subscriptions (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID REFERENCES users(id) ON DELETE CASCADE,
-    plan TEXT DEFAULT 'premium',
-    status TEXT DEFAULT 'trial',
-    trial_end TIMESTAMP,
-    subscription_end TIMESTAMP,
-    created_at TIMESTAMP DEFAULT NOW(),
-    updated_at TIMESTAMP DEFAULT NOW()
-);
-
 CREATE TABLE IF NOT EXISTS city_distances (
     id SERIAL PRIMARY KEY,
     city_a TEXT NOT NULL,
@@ -154,43 +169,21 @@ CREATE TABLE IF NOT EXISTS city_distances (
 );
 
 INSERT INTO city_distances (city_a, city_b, distance_km) VALUES
-('Москва', 'Санкт-Петербург', 705),
-('Москва', 'Казань', 820),
-('Москва', 'Уфа', 1350),
-('Москва', 'Екатеринбург', 1790),
-('Москва', 'Новосибирск', 3350),
-('Москва', 'Краснодар', 1350),
-('Москва', 'Нижний Новгород', 420),
-('Москва', 'Самара', 1050),
-('Москва', 'Ростов-на-Дону', 1080),
-('Москва', 'Воронеж', 520),
-('Москва', 'Волгоград', 970),
-('Москва', 'Пермь', 1390),
-('Москва', 'Челябинск', 1760),
-('Москва', 'Омск', 2700),
-('Москва', 'Красноярск', 4100),
-('Москва', 'Иркутск', 5200),
-('Москва', 'Владивосток', 9100),
-('Москва', 'Хабаровск', 8300),
-('Санкт-Петербург', 'Казань', 1520),
-('Санкт-Петербург', 'Москва', 705),
-('Санкт-Петербург', 'Новосибирск', 4000),
-('Казань', 'Уфа', 530),
-('Казань', 'Екатеринбург', 1000),
-('Екатеринбург', 'Новосибирск', 1560),
-('Екатеринбург', 'Челябинск', 210),
-('Новосибирск', 'Красноярск', 800),
-('Красноярск', 'Иркутск', 1080),
-('Ростов-на-Дону', 'Краснодар', 270),
-('Самара', 'Уфа', 460),
-('Нижний Новгород', 'Казань', 400)
+('Москва', 'Санкт-Петербург', 705),('Москва', 'Казань', 820),('Москва', 'Уфа', 1350),
+('Москва', 'Екатеринбург', 1790),('Москва', 'Новосибирск', 3350),('Москва', 'Краснодар', 1350),
+('Москва', 'Нижний Новгород', 420),('Москва', 'Самара', 1050),('Москва', 'Ростов-на-Дону', 1080),
+('Москва', 'Воронеж', 520),('Москва', 'Волгоград', 970),('Москва', 'Пермь', 1390),
+('Москва', 'Челябинск', 1760),('Москва', 'Омск', 2700),('Москва', 'Красноярск', 4100),
+('Москва', 'Иркутск', 5200),('Москва', 'Владивосток', 9100),('Москва', 'Хабаровск', 8300),
+('Санкт-Петербург', 'Казань', 1520),('Санкт-Петербург', 'Москва', 705),('Санкт-Петербург', 'Новосибирск', 4000),
+('Казань', 'Уфа', 530),('Казань', 'Екатеринбург', 1000),('Екатеринбург', 'Новосибирск', 1560),
+('Екатеринбург', 'Челябинск', 210),('Новосибирск', 'Красноярск', 800),('Красноярск', 'Иркутск', 1080),
+('Ростов-на-Дону', 'Краснодар', 270),('Самара', 'Уфа', 460),('Нижний Новгород', 'Казань', 400)
 ON CONFLICT (city_a, city_b) DO NOTHING;
 
 CREATE INDEX IF NOT EXISTS idx_cargo_status ON cargo(status);
+CREATE INDEX IF NOT EXISTS idx_cargo_shipper ON cargo(shipper_id);
 CREATE INDEX IF NOT EXISTS idx_transport_status ON transport(status);
 CREATE INDEX IF NOT EXISTS idx_matches_status ON matches(status);
 CREATE INDEX IF NOT EXISTS idx_messages_match_id ON messages(match_id);
-CREATE INDEX IF NOT EXISTS idx_messages_receiver ON messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_tracking_match_id ON tracking(match_id);
-CREATE INDEX IF NOT EXISTS idx_escrow_match ON escrow(match_id);
-CREATE INDEX IF NOT EXISTS idx_ratings_target ON ratings(target_id);
