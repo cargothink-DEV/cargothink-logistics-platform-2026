@@ -17,7 +17,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
-    console.error('❌ FATAL: JWT_SECRET missing or too weak');
+    console.error('❌ FATAL: JWT_SECRET missing');
     process.exit(1);
 }
 console.log('✅ Environment validated');
@@ -101,7 +101,6 @@ const requireRole = (roles) => (req, res, next) => {
     next();
 };
 
-// === MATCHING ===
 function calculateMatchScore(cargo, transport) {
     let score = 0;
     if (transport.capacity_kg >= cargo.weight_kg) score += 30;
@@ -166,8 +165,7 @@ function estimatePrice(distance_km, weight_kg, cargo_type) {
     const weightMultiplier = 1 + (weight_kg / 20) * 0.3;
     const total = Math.round(distance_km * pricePerKm * weightMultiplier);
     return {
-        distance_km,
-        price_per_km: pricePerKm,
+        distance_km, price_per_km: pricePerKm,
         weight_multiplier: parseFloat(weightMultiplier.toFixed(2)),
         total_price: total,
         driver_pay: Math.round(total * 0.6),
@@ -186,7 +184,7 @@ async function getDistance(origin, dest) {
     return r.rows[0]?.distance_km || 1500;
 }
 
-// === AUTH ROUTES ===
+// ===== AUTH =====
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 app.post('/api/auth/register', async (req, res) => {
@@ -238,17 +236,30 @@ app.get('/api/auth/me', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === CARGO ===
+// ===== CARGO =====
 app.get('/api/cargo', auth, async (req, res) => {
     try {
-        const result = await pool.query(`SELECT c.*, u.full_name as shipper_name, u.rating as shipper_rating, u.verified as shipper_verified FROM cargo c JOIN users u ON c.shipper_id = u.id WHERE c.status = 'open' ORDER BY c.created_at DESC`);
+        const result = await pool.query(`
+            SELECT c.*, u.full_name as shipper_name, u.rating as shipper_rating, u.verified as shipper_verified
+            FROM cargo c JOIN users u ON c.shipper_id = u.id 
+            WHERE c.status = 'open' ORDER BY c.created_at DESC
+        `);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
 app.get('/api/cargo/my', auth, requireRole(['shipper']), async (req, res) => {
     try {
-        const result = await pool.query('SELECT * FROM cargo WHERE shipper_id = $1 ORDER BY created_at DESC', [req.user.id]);
+        const result = await pool.query(`
+            SELECT c.*,
+                (SELECT COUNT(*) FROM matches m WHERE m.cargo_id = c.id AND m.status = 'pending') as pending_matches,
+                (SELECT COUNT(*) FROM matches m WHERE m.cargo_id = c.id AND m.status = 'accepted') as active_matches,
+                (SELECT COUNT(*) FROM matches m WHERE m.cargo_id = c.id AND m.status IN ('in_transit', 'delivered_by_carrier')) as shipping_matches,
+                (SELECT COUNT(*) FROM matches m WHERE m.cargo_id = c.id AND m.status = 'delivered') as completed_matches
+            FROM cargo c
+            WHERE c.shipper_id = $1
+            ORDER BY c.created_at DESC
+        `, [req.user.id]);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -274,16 +285,20 @@ app.post('/api/cargo', auth, requireRole(['shipper']), async (req, res) => {
 
 app.delete('/api/cargo/:id', auth, requireRole(['shipper']), async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM cargo WHERE id = $1 AND shipper_id = $2 RETURNING id', [req.params.id, req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Cargo not found' });
+        const result = await pool.query('DELETE FROM cargo WHERE id = $1 AND shipper_id = $2 AND status = $3 RETURNING id', [req.params.id, req.user.id, 'open']);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Cargo not found or already matched' });
         res.json({ message: 'Cargo deleted' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === TRANSPORT ===
+// ===== TRANSPORT =====
 app.get('/api/transport', auth, async (req, res) => {
     try {
-        const result = await pool.query(`SELECT t.*, u.full_name as carrier_name, u.rating as carrier_rating FROM transport t JOIN users u ON t.carrier_id = u.id WHERE t.status = 'available' ORDER BY t.created_at DESC`);
+        const result = await pool.query(`
+            SELECT t.*, u.full_name as carrier_name, u.rating as carrier_rating
+            FROM transport t JOIN users u ON t.carrier_id = u.id 
+            WHERE t.status = 'available' ORDER BY t.created_at DESC
+        `);
         res.json(result.rows);
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
@@ -316,13 +331,13 @@ app.post('/api/transport', auth, requireRole(['carrier']), async (req, res) => {
 
 app.delete('/api/transport/:id', auth, requireRole(['carrier']), async (req, res) => {
     try {
-        const result = await pool.query('DELETE FROM transport WHERE id = $1 AND carrier_id = $2 RETURNING id', [req.params.id, req.user.id]);
-        if (result.rows.length === 0) return res.status(404).json({ error: 'Transport not found' });
+        const result = await pool.query('DELETE FROM transport WHERE id = $1 AND carrier_id = $2 AND status = $3 RETURNING id', [req.params.id, req.user.id, 'available']);
+        if (result.rows.length === 0) return res.status(404).json({ error: 'Transport not found or in use' });
         res.json({ message: 'Transport deleted' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === MATCHES ===
+// ===== MATCHES =====
 app.get('/api/matches', auth, async (req, res) => {
     try {
         const result = await pool.query(`
@@ -332,7 +347,8 @@ app.get('/api/matches', auth, async (req, res) => {
                 t.current_city, t.capacity_kg, t.vehicle_type, t.price_per_km,
                 u1.full_name as shipper_name, u1.id as shipper_id, u1.rating as shipper_rating, u1.verified as shipper_verified,
                 u2.full_name as carrier_name, u2.id as carrier_id, u2.rating as carrier_rating, u2.verified as carrier_verified,
-                e.status as escrow_status_check, e.amount as escrow_amount, e.driver_pay, e.fuel, e.tolls, e.platform_fee
+                e.id as escrow_id, e.status as escrow_status_check, e.amount as escrow_amount, 
+                e.driver_pay, e.fuel, e.tolls, e.platform_fee
             FROM matches m
             JOIN cargo c ON m.cargo_id = c.id
             JOIN transport t ON m.transport_id = t.id
@@ -357,7 +373,6 @@ app.post('/api/matches/generate', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// Accept — Träger oder Shipper nimmt Match an
 app.post('/api/matches/:id/accept', auth, async (req, res) => {
     try {
         const matchId = req.params.id;
@@ -406,10 +421,10 @@ app.post('/api/matches/:id/cancel', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === ESCROW ===
+// ===== ESCROW (FIXED — uses cargo.price!) =====
 app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res) => {
     try {
-        const { match_id } = req.body;
+        const { match_id, payment_method } = req.body;
         const check = await pool.query(`
             SELECT m.*, c.price, c.origin_city, c.dest_city, c.weight_kg, c.cargo_type, c.shipper_id, t.carrier_id
             FROM matches m
@@ -420,21 +435,37 @@ app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res)
         if (check.rows.length === 0) return res.status(404).json({ error: 'Match not found or not accepted' });
 
         const m = check.rows[0];
-        const distance = await getDistance(m.origin_city, m.dest_city);
-        const estimate = estimatePrice(distance, m.weight_kg, m.cargo_type);
-        const amount = estimate.total_price;
+        
+        // 🔥 KRITISCHER FIX: Cargo-Preis verwenden, NICHT estimate!
+        const amount = parseFloat(m.price);
+        const driver_pay = Math.round(amount * 0.6);
+        const fuel = Math.round(amount * 0.15);
+        const tolls = Math.round(amount * 0.05);
+        const platform_fee = Math.round(amount * 0.20);
 
         const existing = await pool.query('SELECT id FROM escrow WHERE match_id = $1', [match_id]);
-        if (existing.rows.length > 0) return res.status(400).json({ error: 'Escrow already exists for this match' });
+        if (existing.rows.length > 0) return res.status(400).json({ error: 'Escrow already exists' });
 
         const id = uuidv4();
         await pool.query(
-            `INSERT INTO escrow (id, match_id, shipper_id, carrier_id, amount, driver_pay, fuel, tolls, platform_fee, status)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'held')`,
-            [id, match_id, req.user.id, m.carrier_id, amount, estimate.driver_pay, estimate.fuel, estimate.tolls, estimate.platform_fee]
+            `INSERT INTO escrow (id, match_id, shipper_id, carrier_id, amount, driver_pay, fuel, tolls, platform_fee, status, payment_method)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'held', $10)`,
+            [id, match_id, req.user.id, m.carrier_id, amount, driver_pay, fuel, tolls, platform_fee, payment_method || 'manual']
         );
         await pool.query('UPDATE matches SET escrow_status = $1 WHERE id = $2', ['funded', match_id]);
-        res.json({ escrow_id: id, amount, breakdown: estimate, message: 'Payment secured in escrow' });
+        
+        res.json({ 
+            escrow_id: id, 
+            amount, 
+            breakdown: {
+                total_price: amount,
+                driver_pay,
+                fuel,
+                tolls,
+                platform_fee
+            }, 
+            message: 'Payment secured in escrow' 
+        });
     } catch (err) {
         console.error('Escrow deposit error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -468,8 +499,7 @@ app.post('/api/checkins/:matchId', auth, async (req, res) => {
         if (!['pickup', 'delivery'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
         
         const check = await pool.query(`
-            SELECT m.*, c.shipper_id, t.carrier_id
-            FROM matches m
+            SELECT m.* FROM matches m
             JOIN cargo c ON m.cargo_id = c.id
             JOIN transport t ON m.transport_id = t.id
             WHERE m.id = $1 AND (c.shipper_id = $2 OR t.carrier_id = $2)
@@ -481,7 +511,7 @@ app.post('/api/checkins/:matchId', auth, async (req, res) => {
             `INSERT INTO checkins (id, match_id, user_id, type, lat, lng) VALUES ($1, $2, $3, $4, $5, $6)`,
             [id, matchId, req.user.id, type, lat || null, lng || null]
         );
-        res.json({ success: true, message: `Checked in at ${type}` });
+        res.json({ success: true });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -497,7 +527,7 @@ app.post('/api/matches/:id/delivered', auth, requireRole(['carrier']), async (re
 
         await pool.query('UPDATE matches SET status = $1, updated_at = NOW() WHERE id = $2', ['delivered_by_carrier', matchId]);
         await pool.query('UPDATE escrow SET status = $1, updated_at = NOW() WHERE match_id = $2', ['delivered_by_carrier', matchId]);
-        res.json({ message: 'Delivery confirmed by carrier — waiting for shipper confirmation' });
+        res.json({ message: 'Waiting for shipper confirmation' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -511,17 +541,71 @@ app.post('/api/matches/:id/confirm', auth, requireRole(['shipper']), async (req,
             LEFT JOIN escrow e ON e.match_id = m.id
             WHERE m.id = $1 AND c.shipper_id = $2 AND m.status = 'delivered_by_carrier'
         `, [matchId, req.user.id]);
-        if (check.rows.length === 0) return res.status(404).json({ error: 'Match not found or not delivered' });
+        if (check.rows.length === 0) return res.status(404).json({ error: 'Match not found' });
 
         await pool.query('UPDATE matches SET status = $1, updated_at = NOW() WHERE id = $2', ['delivered', matchId]);
         await pool.query('UPDATE escrow SET status = $1, released_at = NOW(), updated_at = NOW() WHERE match_id = $2', ['released', matchId]);
         await pool.query('UPDATE cargo SET status = $1 WHERE id = (SELECT cargo_id FROM matches WHERE id = $2)', ['delivered', matchId]);
         await pool.query('UPDATE transport SET status = $1 WHERE id = (SELECT transport_id FROM matches WHERE id = $2)', ['available', matchId]);
-        res.json({ message: 'Delivery confirmed — payment released to carrier' });
+        res.json({ message: 'Payment released to carrier' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === RATINGS ===
+// ===== REFUND (Shipper kann Geld zurückfordern wenn Träger nicht kommt) =====
+app.post('/api/matches/:id/refund', auth, requireRole(['shipper']), async (req, res) => {
+    try {
+        const matchId = req.params.id;
+        const check = await pool.query(`
+            SELECT m.*, e.id as escrow_id, e.status as escrow_status, e.amount
+            FROM matches m
+            LEFT JOIN escrow e ON e.match_id = m.id
+            WHERE m.id = $1 AND m.cargo_id IN (SELECT id FROM cargo WHERE shipper_id = $2)
+        `, [matchId, req.user.id]);
+        if (check.rows.length === 0) return res.status(404).json({ error: 'Match not found' });
+        
+        const m = check.rows[0];
+        if (m.escrow_status !== 'held') return res.status(400).json({ error: 'No escrow to refund' });
+        if (m.status === 'in_transit' || m.status === 'delivered_by_carrier') {
+            return res.status(400).json({ error: 'Cannot refund after carrier started' });
+        }
+        
+        await pool.query('UPDATE escrow SET status = $1, updated_at = NOW() WHERE match_id = $2', ['refunded', matchId]);
+        await pool.query('UPDATE matches SET status = $1, escrow_status = $2, updated_at = NOW() WHERE id = $3', ['cancelled', 'refunded', matchId]);
+        await pool.query('UPDATE cargo SET status = $1 WHERE id = (SELECT cargo_id FROM matches WHERE id = $2)', ['open', matchId]);
+        await pool.query('UPDATE transport SET status = $1 WHERE id = (SELECT transport_id FROM matches WHERE id = $2)', ['available', matchId]);
+        
+        res.json({ message: 'Refund processed', amount: m.amount });
+    } catch (err) {
+        console.error('Refund error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// ===== DISPUTES =====
+app.post('/api/disputes', auth, async (req, res) => {
+    try {
+        const { match_id, reason } = req.body;
+        if (!match_id || !reason) return res.status(400).json({ error: 'Missing fields' });
+        
+        const check = await pool.query(`
+            SELECT m.* FROM matches m
+            JOIN cargo c ON m.cargo_id = c.id
+            JOIN transport t ON m.transport_id = t.id
+            WHERE m.id = $1 AND (c.shipper_id = $2 OR t.carrier_id = $2)
+        `, [match_id, req.user.id]);
+        if (check.rows.length === 0) return res.status(403).json({ error: 'Not authorized' });
+        
+        const id = uuidv4();
+        await pool.query(
+            `INSERT INTO disputes (id, match_id, opened_by, reason) VALUES ($1, $2, $3, $4)`,
+            [id, match_id, req.user.id, reason]
+        );
+        await pool.query('UPDATE escrow SET status = $1 WHERE match_id = $2', ['disputed', match_id]);
+        res.json({ dispute_id: id, message: 'Dispute opened. Escrow frozen.' });
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ===== RATINGS =====
 app.post('/api/ratings', auth, async (req, res) => {
     try {
         const { match_id, rating, comment } = req.body;
@@ -540,11 +624,10 @@ app.post('/api/ratings', auth, async (req, res) => {
         const targetId = req.user.id === m.shipper_id ? m.carrier_id : m.shipper_id;
 
         const existing = await pool.query('SELECT id FROM ratings WHERE match_id = $1 AND rater_id = $2', [match_id, req.user.id]);
-        if (existing.rows.length > 0) return res.status(400).json({ error: 'Already rated this match' });
+        if (existing.rows.length > 0) return res.status(400).json({ error: 'Already rated' });
 
         await pool.query(
-            `INSERT INTO ratings (id, match_id, rater_id, target_id, rating, comment)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
+            `INSERT INTO ratings (id, match_id, rater_id, target_id, rating, comment) VALUES ($1, $2, $3, $4, $5, $6)`,
             [uuidv4(), match_id, req.user.id, targetId, rating, comment || null]
         );
 
@@ -559,7 +642,7 @@ app.post('/api/ratings', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === PRICE ===
+// ===== PRICE =====
 app.post('/api/price/estimate', auth, async (req, res) => {
     try {
         const { origin_city, dest_city, weight_kg, cargo_type } = req.body;
@@ -569,14 +652,31 @@ app.post('/api/price/estimate', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === MESSAGES ===
+// ===== ETA =====
+app.get('/api/matches/:id/eta', auth, async (req, res) => {
+    try {
+        const m = await pool.query(`
+            SELECT c.origin_city, c.dest_city FROM matches m
+            JOIN cargo c ON m.cargo_id = c.id
+            WHERE m.id = $1
+        `, [req.params.id]);
+        if (m.rows.length === 0) return res.status(404).json({ error: 'Not found' });
+        
+        const distance = await getDistance(m.rows[0].origin_city, m.rows[0].dest_city);
+        const avgSpeed = 70;
+        const hours = Math.round(distance / avgSpeed);
+        const eta = new Date(Date.now() + hours * 3600 * 1000);
+        
+        res.json({ distance_km: distance, hours, eta: eta.toISOString() });
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ===== MESSAGES =====
 app.get('/api/messages/conversations', auth, async (req, res) => {
     try {
         const result = await pool.query(`
             SELECT DISTINCT ON (m.match_id)
-                m.match_id,
-                m.content as last_message,
-                m.created_at as last_message_time,
+                m.match_id, m.content as last_message, m.created_at as last_message_time,
                 CASE WHEN m.sender_id = $1 THEN m.receiver_id ELSE m.sender_id END as other_user_id,
                 CASE WHEN m.sender_id = $1 THEN u2.full_name ELSE u1.full_name END as other_user_name,
                 c.origin_city, c.dest_city,
@@ -631,15 +731,13 @@ app.post('/api/messages', auth, async (req, res) => {
         if (check.rows.length === 0) return res.status(403).json({ error: 'Not authorized' });
 
         const id = uuidv4();
-        await pool.query(
-            `INSERT INTO messages (id, sender_id, receiver_id, match_id, content) VALUES ($1, $2, $3, $4, $5)`,
-            [id, req.user.id, receiver_id, match_id, content]
-        );
+        await pool.query(`INSERT INTO messages (id, sender_id, receiver_id, match_id, content) VALUES ($1, $2, $3, $4, $5)`,
+            [id, req.user.id, receiver_id, match_id, content]);
         res.status(201).json({ id });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === STATS ===
+// ===== STATS =====
 app.get('/api/stats', auth, async (req, res) => {
     try {
         const cargoOpen = await pool.query("SELECT COUNT(*) FROM cargo WHERE status = 'open'");
@@ -655,10 +753,9 @@ app.get('/api/stats', auth, async (req, res) => {
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
-// === FRONTEND ===
+// ===== FRONTEND =====
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
 
-// === MIGRATION ===
 const initDb = async () => {
     try {
         const schemaPath = path.join(__dirname, 'schema.sql');
@@ -685,7 +782,7 @@ const initDb = async () => {
 (async () => {
     try {
         await initDb();
-        app.listen(PORT, () => console.log(`🚛 CargoThink v2.2 running on ${PORT}`));
+        app.listen(PORT, () => console.log(`🚛 CargoThink v2.3 running on ${PORT}`));
     } catch (err) {
         console.error('🚨 Startup aborted:', err.message);
         process.exit(1);
