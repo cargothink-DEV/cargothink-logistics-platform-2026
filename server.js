@@ -17,18 +17,19 @@ const JWT_SECRET = process.env.JWT_SECRET;
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5000';
 
 // ═══════════════════════════════════════════════════════
-// KONSTANTEN
+// KONSTANTEN — 0% KOMMISSION
 // ═══════════════════════════════════════════════════════
-const COMMISSION_RATE = 0.10;
-const DRIVER_SHARE = 0.70;
-const FUEL_SHARE = 0.15;
-const TOLLS_SHARE = 0.05;
+const COMMISSION_RATE = 0;       // 0% — wir nehmen nichts
+const DRIVER_SHARE = 1.0;        // Fahrer bekommt 100% der Fracht
+const FUEL_INFO_SHARE = 0.15;    // Nur Info (Schätzung Treibstoff)
+const TOLLS_INFO_SHARE = 0.05;   // Nur Info (Schätzung Maut)
 
 if (!JWT_SECRET || JWT_SECRET.length < 32) {
     console.error('❌ FATAL: JWT_SECRET missing');
     process.exit(1);
 }
 console.log('✅ Environment validated');
+console.log('💰 Commission: ' + (COMMISSION_RATE * 100) + '% (FREE)');
 
 const pool = new Pool({
     host: process.env.DB_HOST || 'localhost',
@@ -53,7 +54,7 @@ app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, skipSu
 app.use('/api/auth/register', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, skipSuccessfulRequests: true }));
 
 // ═══════════════════════════════════════════════════════
-// VALIDATION SCHEMAS
+// VALIDATION
 // ═══════════════════════════════════════════════════════
 const registerSchema = Joi.object({
     email: Joi.string().email().required().max(255),
@@ -202,34 +203,40 @@ async function generateMatches(userId) {
     } catch (err) { console.error('Match generation error:', err); throw err; }
 }
 
+// ═══════════════════════════════════════════════════════
+// BREAKDOWN — 0% Kommission
+// ═══════════════════════════════════════════════════════
 function calculateBreakdown(total_price) {
     const total = parseFloat(total_price);
+    const fuel_estimate = Math.round(total * FUEL_INFO_SHARE);
+    const tolls_estimate = Math.round(total * TOLLS_INFO_SHARE);
+    const net_profit = total - fuel_estimate - tolls_estimate;
+    
     return {
         total_price: total,
-        driver_pay: Math.round(total * DRIVER_SHARE),
-        fuel: Math.round(total * FUEL_SHARE),
-        tolls: Math.round(total * TOLLS_SHARE),
-        platform_fee: Math.round(total * COMMISSION_RATE),
-        commission_rate: COMMISSION_RATE
+        driver_pay: total,              // Fahrer bekommt 100%
+        platform_fee: 0,                // Wir nehmen nichts
+        commission_rate: 0,
+        fuel_estimate: fuel_estimate,   // Info
+        tolls_estimate: tolls_estimate, // Info
+        net_profit: net_profit          // Info (was der Fahrer nach Sprit/Maut behält)
     };
 }
 
 // ═══════════════════════════════════════════════════════
-// DYNAMIC PRICING ENGINE
+// DYNAMIC PRICING
 // ═══════════════════════════════════════════════════════
 async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_type, pickup_date) {
     const dieselCurrent = parseFloat(await getSetting('diesel_price', '68'));
     const dieselReference = parseFloat(await getSetting('diesel_reference', '60'));
     const surgeEnabled = (await getSetting('surge_enabled', 'true')) === 'true';
 
-    // 1. Basispreis
     const distance_km = await getDistance(origin_city, dest_city);
     const pricePerKmMap = { 'refrigerated': 55, 'van': 45, 'open': 40, 'isothermal': 50, 'tank': 60 };
     const pricePerKm = pricePerKmMap[cargo_type] || 45;
     const weightMultiplier = 1 + (weight_kg / 20) * 0.3;
     const basePrice = distance_km * pricePerKm * weightMultiplier;
 
-    // 2. Nachfrage
     const openCargoRes = await pool.query("SELECT COUNT(*) FROM cargo WHERE status = 'open'");
     const availableTransportRes = await pool.query("SELECT COUNT(*) FROM transport WHERE status = 'available'");
     const openCargos = parseInt(openCargoRes.rows[0].count) || 0;
@@ -246,13 +253,11 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
         else demandFactor = 1.9;
     }
 
-    // 3. Kraftstoff
     let fuelFactor = 1.0;
     if (surgeEnabled) {
         fuelFactor = Math.max(0.9, Math.min(1.8, dieselCurrent / dieselReference));
     }
 
-    // 4. Zeit
     const now = new Date();
     const hour = now.getHours();
     let timeFactor = 1.0;
@@ -261,7 +266,6 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
         else if (hour >= 22 || hour < 6) timeFactor = 1.25;
     }
 
-    // 5. Saison
     const month = now.getMonth() + 1;
     let seasonFactor = 1.0;
     if (surgeEnabled) {
@@ -270,7 +274,6 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
         else if (month >= 4 && month <= 5) seasonFactor = 1.05;
     }
 
-    // 6. Dringlichkeit
     let urgencyFactor = 1.0;
     if (surgeEnabled && pickup_date) {
         const daysUntil = (new Date(pickup_date) - now) / (1000 * 60 * 60 * 24);
@@ -279,7 +282,6 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
         else if (daysUntil > 7) urgencyFactor = 0.95;
     }
 
-    // 7. Popularität
     const routeRes = await pool.query(`
         SELECT COUNT(*) FROM cargo 
         WHERE origin_city = $1 AND dest_city = $2 
@@ -296,6 +298,9 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
     const totalFactor = demandFactor * fuelFactor * timeFactor * seasonFactor * urgencyFactor * popularityFactor;
     const total = Math.round(basePrice * totalFactor);
 
+    const fuel_estimate = Math.round(total * FUEL_INFO_SHARE);
+    const tolls_estimate = Math.round(total * TOLLS_INFO_SHARE);
+
     return {
         base_price: Math.round(basePrice),
         distance_km,
@@ -309,13 +314,14 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
         popularity_factor: parseFloat(popularityFactor.toFixed(2)),
         total_factor: parseFloat(totalFactor.toFixed(2)),
         total_price: total,
-        driver_pay: Math.round(total * DRIVER_SHARE),
-        fuel: Math.round(total * FUEL_SHARE),
-        tolls: Math.round(total * TOLLS_SHARE),
-        platform_fee: Math.round(total * COMMISSION_RATE),
+        driver_pay: total,
+        platform_fee: 0,
+        commission_rate: 0,
+        fuel_estimate: fuel_estimate,
+        tolls_estimate: tolls_estimate,
+        net_profit: total - fuel_estimate - tolls_estimate,
         surge_active: totalFactor > 1.15,
         surge_label: totalFactor > 1.5 ? '🔥 Высокий спрос' : totalFactor > 1.15 ? '📈 Повышенный спрос' : totalFactor < 0.9 ? '📉 Скидка' : null,
-        commission_rate: COMMISSION_RATE,
         diesel_current: dieselCurrent,
         diesel_reference: dieselReference,
         open_cargos: openCargos,
@@ -324,7 +330,7 @@ async function calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_ty
 }
 
 // ═══════════════════════════════════════════════════════
-// AUTH
+// AUTH ROUTES
 // ═══════════════════════════════════════════════════════
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
@@ -418,7 +424,7 @@ app.post('/api/cargo', auth, requireRole(['shipper']), async (req, res) => {
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)`,
             [id, req.user.id, origin_city, dest_city, origin_address || null, dest_address || null, weight_kg, cargo_type, pickup_date, delivery_date || null, price, base_price || null, surge_multiplier || 1.0, price_factors ? JSON.stringify(price_factors) : null, description || null]
         );
-        console.log(`📦 Cargo: ${origin_city} → ${dest_city} · ${price} ₽ (×${surge_multiplier || 1.0})`);
+        console.log(`📦 Cargo: ${origin_city} → ${dest_city} · ${price} ₽ (kommission: 0%)`);
         setImmediate(() => { generateMatches(req.user.id).catch(console.error); });
         res.status(201).json({ id, message: 'Cargo created', price: price });
     } catch (err) {
@@ -480,39 +486,6 @@ app.delete('/api/transport/:id', auth, requireRole(['carrier']), async (req, res
         const result = await pool.query('DELETE FROM transport WHERE id = $1 AND carrier_id = $2 AND status = $3 RETURNING id', [req.params.id, req.user.id, 'available']);
         if (result.rows.length === 0) return res.status(404).json({ error: 'Transport not found or in use' });
         res.json({ message: 'Transport deleted' });
-    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
-});
-
-// ═══════════════════════════════════════════════════════
-// PRICE — Dynamic + Static
-// ═══════════════════════════════════════════════════════
-app.post('/api/price/dynamic', auth, async (req, res) => {
-    try {
-        const { origin_city, dest_city, weight_kg, cargo_type, pickup_date } = req.body;
-        if (!origin_city || !dest_city || !weight_kg || !cargo_type) {
-            return res.status(400).json({ error: 'Missing fields' });
-        }
-        const breakdown = await calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_type, pickup_date);
-        res.json(breakdown);
-    } catch (err) {
-        console.error('Dynamic price error:', err);
-        res.status(500).json({ error: 'Internal server error' });
-    }
-});
-
-app.post('/api/price/estimate', auth, async (req, res) => {
-    try {
-        const { origin_city, dest_city, weight_kg, cargo_type } = req.body;
-        if (!origin_city || !dest_city || !weight_kg || !cargo_type) return res.status(400).json({ error: 'Missing fields' });
-        const distance_km = await getDistance(origin_city, dest_city);
-        const pricePerKmMap = { 'refrigerated': 55, 'van': 45, 'open': 40, 'isothermal': 50, 'tank': 60 };
-        const pricePerKm = pricePerKmMap[cargo_type] || 45;
-        const weightMultiplier = 1 + (weight_kg / 20) * 0.3;
-        const total = Math.round(distance_km * pricePerKm * weightMultiplier);
-        const breakdown = calculateBreakdown(total);
-        breakdown.distance_km = distance_km;
-        breakdown.price_per_km = pricePerKm;
-        res.json(breakdown);
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -604,7 +577,7 @@ app.post('/api/matches/:id/cancel', auth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
-// ESCROW
+// ESCROW — 0% Kommission
 // ═══════════════════════════════════════════════════════
 app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res) => {
     try {
@@ -628,11 +601,12 @@ app.post('/api/escrow/deposit', auth, requireRole(['shipper']), async (req, res)
         await pool.query(
             `INSERT INTO escrow (id, match_id, shipper_id, carrier_id, amount, driver_pay, fuel, tolls, platform_fee, commission_rate, status, payment_method)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'held', $11)`,
-            [id, match_id, req.user.id, m.carrier_id, breakdown.total_price, breakdown.driver_pay, breakdown.fuel, breakdown.tolls, breakdown.platform_fee, COMMISSION_RATE, payment_method || 'manual']
+            [id, match_id, req.user.id, m.carrier_id, breakdown.total_price, breakdown.driver_pay, breakdown.fuel_estimate, breakdown.tolls_estimate, 0, 0, payment_method || 'manual']
         );
         await pool.query('UPDATE matches SET escrow_status = $1 WHERE id = $2', ['funded', match_id]);
         
-        res.json({ escrow_id: id, amount: breakdown.total_price, breakdown: breakdown, message: 'Payment secured' });
+        console.log(`💰 Escrow: ${breakdown.total_price} ₽ · Kommission: 0 ₽ (FREE)`);
+        res.json({ escrow_id: id, amount: breakdown.total_price, breakdown: breakdown, message: 'Payment secured · No commission' });
     } catch (err) {
         console.error('Escrow deposit error:', err);
         res.status(500).json({ error: 'Internal server error' });
@@ -738,7 +712,7 @@ app.post('/api/matches/:id/confirm', auth, requireRole(['shipper']), async (req,
         await pool.query('UPDATE escrow SET status = $1, released_at = NOW(), updated_at = NOW() WHERE match_id = $2', ['released', matchId]);
         await pool.query('UPDATE cargo SET status = $1 WHERE id = (SELECT cargo_id FROM matches WHERE id = $2)', ['delivered', matchId]);
         await pool.query('UPDATE transport SET status = $1 WHERE id = (SELECT transport_id FROM matches WHERE id = $2)', ['available', matchId]);
-        res.json({ message: 'Payment released' });
+        res.json({ message: 'Payment released · No commission taken' });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
 });
 
@@ -837,6 +811,39 @@ app.post('/api/ratings', auth, async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════
+// PRICE
+// ═══════════════════════════════════════════════════════
+app.post('/api/price/dynamic', auth, async (req, res) => {
+    try {
+        const { origin_city, dest_city, weight_kg, cargo_type, pickup_date } = req.body;
+        if (!origin_city || !dest_city || !weight_kg || !cargo_type) {
+            return res.status(400).json({ error: 'Missing fields' });
+        }
+        const breakdown = await calculateDynamicPrice(origin_city, dest_city, weight_kg, cargo_type, pickup_date);
+        res.json(breakdown);
+    } catch (err) {
+        console.error('Dynamic price error:', err);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+app.post('/api/price/estimate', auth, async (req, res) => {
+    try {
+        const { origin_city, dest_city, weight_kg, cargo_type } = req.body;
+        if (!origin_city || !dest_city || !weight_kg || !cargo_type) return res.status(400).json({ error: 'Missing fields' });
+        const distance_km = await getDistance(origin_city, dest_city);
+        const pricePerKmMap = { 'refrigerated': 55, 'van': 45, 'open': 40, 'isothermal': 50, 'tank': 60 };
+        const pricePerKm = pricePerKmMap[cargo_type] || 45;
+        const weightMultiplier = 1 + (weight_kg / 20) * 0.3;
+        const total = Math.round(distance_km * pricePerKm * weightMultiplier);
+        const breakdown = calculateBreakdown(total);
+        breakdown.distance_km = distance_km;
+        breakdown.price_per_km = pricePerKm;
+        res.json(breakdown);
+    } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
+});
+
+// ═══════════════════════════════════════════════════════
 // SHARED LOADS
 // ═══════════════════════════════════════════════════════
 app.get('/api/shared-loads', auth, async (req, res) => {
@@ -886,14 +893,12 @@ app.post('/api/shared-loads/:id/join', auth, requireRole(['shipper']), async (re
         const primary = await pool.query('SELECT * FROM cargo WHERE id = $1', [sl.rows[0].primary_cargo_id]);
         const p = primary.rows[0];
 
-        // Prüfen ob gleiche Route und kompatibles Datum
         if (p.origin_city !== cargo.rows[0].origin_city || p.dest_city !== cargo.rows[0].dest_city) {
             return res.status(400).json({ error: 'Route must match' });
         }
 
         const newWeight = sl.rows[0].total_weight_kg + cargo.rows[0].weight_kg;
         const newPrice = parseFloat(sl.rows[0].combined_price) + parseFloat(cargo.rows[0].price);
-        // 15% Ersparnis durch gemeinsamen LKW
         const savingsPercent = 15;
 
         await pool.query(
@@ -910,13 +915,11 @@ app.post('/api/shared-loads/:id/join', auth, requireRole(['shipper']), async (re
 });
 
 // ═══════════════════════════════════════════════════════
-// FUEL PRICES (Kraftstoff-Tracking)
+// FUEL PRICES
 // ═══════════════════════════════════════════════════════
 app.get('/api/fuel/prices', auth, async (req, res) => {
     try {
-        const result = await pool.query(`
-            SELECT * FROM fuel_prices ORDER BY recorded_at DESC LIMIT 30
-        `);
+        const result = await pool.query(`SELECT * FROM fuel_prices ORDER BY recorded_at DESC LIMIT 30`);
         const current = await getSetting('diesel_price', '68');
         res.json({ current, history: result.rows });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
@@ -1068,7 +1071,7 @@ app.get('/api/stats', auth, async (req, res) => {
             available_transport: parseInt(transportAvail.rows[0].count),
             pending_matches: parseInt(matchesPending.rows[0].count),
             completed_shipments: parseInt(completed.rows[0].count),
-            commission_rate: COMMISSION_RATE,
+            commission_rate: 0,
             diesel_price: parseFloat(diesel)
         });
     } catch (err) { res.status(500).json({ error: 'Internal server error' }); }
@@ -1110,9 +1113,10 @@ const initDb = async () => {
         await initDb();
         app.listen(PORT, () => {
             console.log('');
-            console.log(`🚛 CargoThink v3.0 running on ${PORT}`);
-            console.log(`💰 Commission: ${COMMISSION_RATE * 100}%`);
-            console.log(`⛽ Dynamic pricing: enabled`);
+            console.log(`🚛 CargoThink v4.0 running on ${PORT}`);
+            console.log(`💰 Kommission: 0% (FREE)`);
+            console.log(`⛽ Dynamic Pricing: ON`);
+            console.log(`🎯 Ziel: 20 Nutzer in 30 Tagen`);
             console.log('');
         });
     } catch (err) {
