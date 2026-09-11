@@ -93,7 +93,6 @@ body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; displa
 .route-info-item .val { font-size:15px; font-weight:600; color:#fff; }
 .route-info-item .val.price { color:#F5B51B; }
 .rating-badge { display:inline-block; background:#F5B51B22; color:#F5B51B; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; margin-left:6px; }
-.verified-badge { display:inline-block; background:#4ADE8022; color:#4ADE80; padding:2px 8px; border-radius:12px; font-size:11px; font-weight:600; margin-left:6px; }
 .cost-breakdown { background:#0B0D0F; border-radius:8px; padding:14px; margin-top:12px; }
 .cost-row { display:flex; justify-content:space-between; padding:4px 0; font-size:13px; }
 .cost-row.driver { color:#4ADE80; }
@@ -164,7 +163,7 @@ body { font-family:'Inter',sans-serif; background:#0B0D0F; color:#F4F5F6; displa
 
 <div class="modal-overlay" id="registerModal"><div class="modal"><div class="modal-header"><h2>Регистрация</h2><button class="close" onclick="closeModal('registerModal')">×</button></div><div class="form-group"><label>Имя</label><input class="input" id="regName"></div><div class="form-group"><label>Email</label><input class="input" id="regEmail"></div><div class="form-group"><label>Пароль</label><input class="input" id="regPassword" type="password"></div><div class="form-group"><label>Роль</label><select class="input" id="regRole"><option value="shipper">Грузоотправитель</option><option value="carrier">Перевозчик</option></select></div><div class="form-group"><label>Компания</label><input class="input" id="regCompany"></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('registerModal')">Отмена</button><button class="btn btn-primary" onclick="handleRegister()">Зарегистрироваться</button></div></div></div>
 
-<div class="modal-overlay" id="cargoModal"><div class="modal"><div class="modal-header"><h2>📦 Новый груз</h2><button class="close" onclick="closeModal('cargoModal')">×</button></div><div class="form-grid"><div class="form-group"><label>Откуда (город)</label><input class="input" id="cargoOrigin" placeholder="Москва"></div><div class="form-group"><label>Куда (город)</label><input class="input" id="cargoDest" placeholder="Уфа"></div><div class="form-group full"><label>Адрес отправления</label><input class="input" id="cargoOriginAddress" placeholder="ул. Тверская, д. 1"></div><div class="form-group full"><label>Адрес доставки</label><input class="input" id="cargoDestAddress" placeholder="ул. Баумана, д. 10"></div><div class="form-group"><label>Вес (т)</label><input class="input" id="cargoWeight" type="number"></div><div class="form-group"><label>Тип</label><select class="input" id="cargoType"><option value="refrigerated">Рефрижератор</option><option value="van">Фургон</option><option value="open">Открытый</option><option value="isothermal">Изотерм</option></select></div><div class="form-group"><label>Дата загрузки</label><input class="input" id="cargoPickup" type="date"></div><div class="form-group"><label>Цена (₽)</label><input class="input" id="cargoPrice" type="number"></div><div class="form-group full"><label>Описание</label><textarea class="input" id="cargoDesc" rows="2"></textarea></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('cargoModal')">Отмена</button><button class="btn btn-primary" onclick="submitCargo()">Опубликовать</button></div></div></div>
+<div class="modal-overlay" id="cargoModal"><div class="modal"><div class="modal-header"><h2>📦 Новый груз</h2><button class="close" onclick="closeModal('cargoModal')">×</button></div><div class="form-grid"><div class="form-group"><label>Откуда (город)</label><input class="input" id="cargoOrigin" placeholder="Москва"></div><div class="form-group"><label>Куда (город)</label><input class="input" id="cargoDest" placeholder="Уфа"></div><div class="form-group full"><label>Адрес отправления</label><input class="input" id="cargoOriginAddress" placeholder="ул. Тверская, д. 1"></div><div class="form-group full"><label>Адрес доставки</label><input class="input" id="cargoDestAddress" placeholder="ул. Баумана, д. 10"></div><div class="form-group"><label>Вес (т)</label><input class="input" id="cargoWeight" type="number"></div><div class="form-group"><label>Тип</label><select class="input" id="cargoType"><option value="refrigerated">Рефрижератор</option><option value="van">Фургон</option><option value="open">Открытый</option><option value="isothermal">Изотерм</option></select></div><div class="form-group"><label>Дата загрузки</label><input class="input" id="cargoPickup" type="date"></div><div class="form-group"><label>Цена (₽) — без пробелов</label><input class="input" id="cargoPrice" type="text" inputmode="numeric" placeholder="15000"></div><div class="form-group full"><label>Описание</label><textarea class="input" id="cargoDesc" rows="2"></textarea></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('cargoModal')">Отмена</button><button class="btn btn-primary" onclick="submitCargo()">Опубликовать</button></div></div></div>
 
 <div class="modal-overlay" id="transportModal"><div class="modal"><div class="modal-header"><h2>🚛 Новый транспорт</h2><button class="close" onclick="closeModal('transportModal')">×</button></div><div class="form-grid"><div class="form-group"><label>Где сейчас</label><input class="input" id="transportLocation" placeholder="Москва"></div><div class="form-group"><label>Тип ТС</label><select class="input" id="transportType"><option value="refrigerated">Рефрижератор</option><option value="van">Фургон</option><option value="open">Открытый</option><option value="isothermal">Изотерм</option></select></div><div class="form-group"><label>Грузоподъемность (т)</label><input class="input" id="transportCapacity" type="number"></div><div class="form-group"><label>Цена за км (₽)</label><input class="input" id="transportPrice" type="number"></div><div class="form-group"><label>Свободен с</label><input class="input" id="transportAvailable" type="date"></div><div class="form-group full"><label>Описание</label><textarea class="input" id="transportDesc" rows="2"></textarea></div></div><div class="modal-actions"><button class="btn btn-secondary" onclick="closeModal('transportModal')">Отмена</button><button class="btn btn-primary" onclick="submitTransport()">Опубликовать</button></div></div></div>
 
@@ -188,6 +187,25 @@ function updateUserInfo() {
         document.getElementById('userRole').textContent = 'Не авторизован';
         document.getElementById('userAvatar').textContent = 'Г';
     }
+}
+
+function parsePrice(str) {
+    if (typeof str === 'number') return str;
+    var cleaned = String(str).replace(/[\s.,]/g, '');
+    return parseInt(cleaned) || 0;
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '—';
+    try {
+        var d = new Date(dateStr);
+        return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+    } catch (e) { return dateStr; }
+}
+
+function formatPrice(num) {
+    if (num === null || num === undefined) return '—';
+    return Math.round(parseFloat(num)).toLocaleString('ru-RU') + ' ₽';
 }
 
 async function apiCall(endpoint, method, body) {
@@ -348,9 +366,9 @@ async function loadMatches() {
             html += '<div class="intel-card">';
             html += '<div class="route">' + (m.origin_city || '—') + ' → ' + (m.dest_city || '—') + '<small>' + (m.weight_kg || 0) + ' т · ' + (m.cargo_type || '—') + '</small></div>';
             html += '<span class="match">' + Math.round(m.match_score || 0) + '% совпадение</span>';
-            html += '<div class="detail">👤 ' + (m.shipper_name || '—') + ' ⭐ ' + shipperRating + (m.shipper_verified ? ' ✅' : '') + '</div>';
+            html += '<div class="detail">👤 ' + (m.shipper_name || '—') + ' ⭐ ' + shipperRating + '</div>';
             html += '<div class="detail">🚛 ' + (m.carrier_name || '—') + ' ⭐ ' + carrierRating + '</div>';
-            html += '<div class="price">' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() + ' ₽' : '—') + '</div>';
+            html += '<div class="price">' + formatPrice(m.cargo_price) + '</div>';
             html += '<button class="btn btn-primary btn-sm" style="margin-top:10px; width:100%;" onclick="acceptMatch(\'' + m.id + '\')">Принять</button>';
             html += '</div>';
         }
@@ -386,20 +404,19 @@ async function loadCargoList() {
             if (c.active_matches > 0) { statusText = 'Перевозчик найден'; statusColor = '#60A5FA'; }
             else if (c.shipping_matches > 0) { statusText = 'В пути'; statusColor = '#F5B51B'; }
             else if (c.completed_matches > 0) { statusText = 'Доставлено'; statusColor = '#22c55e'; }
-            else if (c.pending_matches > 0) { statusText = 'Ищем перевозчика (' + c.pending_matches + ' совпадений)'; statusColor = '#FBBF24'; }
+            else if (c.pending_matches > 0) { statusText = 'Ищем перевозчика (' + c.pending_matches + ')'; statusColor = '#FBBF24'; }
             
             html += '<div class="card">';
             html += '<div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;">';
             html += '<div><div style="font-size:18px; font-weight:700; margin-bottom:6px;">' + c.origin_city + ' → ' + c.dest_city + '</div>';
             if (c.origin_address) html += '<div style="font-size:13px; color:#888B93;">📍 ' + c.origin_address + '</div>';
             if (c.dest_address) html += '<div style="font-size:13px; color:#888B93;">🎯 ' + c.dest_address + '</div>';
-            html += '<div style="margin-top:10px; font-size:13px; color:#888B93;">📦 ' + c.weight_kg + ' т · ' + c.cargo_type + ' · 📅 ' + (c.pickup_date || '—') + '</div>';
+            html += '<div style="margin-top:10px; font-size:13px; color:#888B93;">📦 ' + c.weight_kg + ' т · ' + c.cargo_type + ' · 📅 ' + formatDate(c.pickup_date) + '</div>';
             html += '<div style="margin-top:8px;"><span class="status-pill" style="background:' + statusColor + '22;color:' + statusColor + ';">' + statusText + '</span></div>';
             html += '</div>';
-            html += '<div style="text-align:right;"><div style="font-size:22px; font-weight:800; color:#F5B51B;">' + (c.price ? parseFloat(c.price).toLocaleString() + ' ₽' : '—') + '</div></div>';
+            html += '<div style="text-align:right;"><div style="font-size:22px; font-weight:800; color:#F5B51B;">' + formatPrice(c.price) + '</div></div>';
             html += '</div>';
             
-            // Buttons
             if (currentUser.role === 'shipper') {
                 html += '<div class="route-actions" style="margin-top:14px;">';
                 if (c.status === 'open') {
@@ -421,7 +438,7 @@ async function loadCargoList() {
 }
 
 async function deleteCargo(cargoId) {
-    if (!confirm('Удалить этот груз? Действие необратимо.')) return;
+    if (!confirm('Удалить этот груз?')) return;
     try {
         await apiCall('/cargo/' + cargoId, 'DELETE');
         showToast('Успех', 'Груз удалён');
@@ -437,7 +454,7 @@ async function declineAllMatches(cargoId) {
         for (var i = 0; i < toDecline.length; i++) {
             await apiCall('/matches/' + toDecline[i].id + '/decline', 'POST');
         }
-        showToast('Успех', 'Отклонено ' + toDecline.length + ' совпадений');
+        showToast('Успех', 'Отклонено ' + toDecline.length);
         loadCargoList();
     } catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -452,13 +469,25 @@ async function submitCargo() {
     var weight = parseInt(document.getElementById('cargoWeight').value);
     var type = document.getElementById('cargoType').value;
     var pickup = document.getElementById('cargoPickup').value;
-    var price = parseInt(document.getElementById('cargoPrice').value);
+    var rawPrice = document.getElementById('cargoPrice').value;
+    var price = parsePrice(rawPrice);
     var desc = document.getElementById('cargoDesc').value.trim();
+    
+    console.log('📦 Cargo submit — raw:', rawPrice, 'parsed:', price);
+    
     if (!origin || !dest || !weight || !pickup || !price) { showToast('Ошибка', 'Заполните поля', true); return; }
+    if (price < 100) { showToast('Ошибка', 'Цена мин. 100 ₽', true); return; }
+    
     try {
-        await apiCall('/cargo', 'POST', { origin_city: origin, dest_city: dest, origin_address: originAddress || null, dest_address: destAddress || null, weight_kg: weight, cargo_type: type, pickup_date: pickup, delivery_date: null, price: price, description: desc || null });
+        await apiCall('/cargo', 'POST', { 
+            origin_city: origin, dest_city: dest, 
+            origin_address: originAddress || null, dest_address: destAddress || null, 
+            weight_kg: weight, cargo_type: type, 
+            pickup_date: pickup, delivery_date: null, 
+            price: price, description: desc || null 
+        });
         closeModal('cargoModal');
-        showToast('Успех', 'Груз опубликован!');
+        showToast('Успех', 'Груз опубликован! Цена: ' + formatPrice(price));
         navigateTo('cargo');
     } catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -477,7 +506,7 @@ async function loadTransportList() {
         var html = '';
         for (var i = 0; i < transport.length; i++) {
             var t = transport[i];
-            html += '<div class="card"><div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;"><div><div style="font-size:18px; font-weight:700; margin-bottom:6px;">🚛 ' + t.current_city + '</div><div style="font-size:13px; color:#888B93;">' + t.capacity_kg + ' т · ' + t.vehicle_type + ' · 📅 ' + t.available_from + '</div><div style="font-size:13px; color:#888B93; margin-top:4px;">👤 ' + (t.carrier_name || '—') + '</div></div><div style="text-align:right;"><div style="font-size:18px; font-weight:700; color:#4ADE80;">' + (t.price_per_km || '—') + ' ₽/км</div></div></div></div>';
+            html += '<div class="card"><div style="display:flex; justify-content:space-between; align-items:start; flex-wrap:wrap; gap:10px;"><div><div style="font-size:18px; font-weight:700; margin-bottom:6px;">🚛 ' + t.current_city + '</div><div style="font-size:13px; color:#888B93;">' + t.capacity_kg + ' т · ' + t.vehicle_type + ' · 📅 ' + formatDate(t.available_from) + '</div><div style="font-size:13px; color:#888B93; margin-top:4px;">👤 ' + (t.carrier_name || '—') + '</div></div><div style="text-align:right;"><div style="font-size:18px; font-weight:700; color:#4ADE80;">' + (t.price_per_km || '—') + ' ₽/км</div></div></div></div>';
         }
         container.innerHTML = html;
     } catch (err) { console.error(err); }
@@ -525,13 +554,13 @@ async function loadRoutesData() {
             if (m.origin_address) html += '<div class="route-subtitle">📍 ' + m.origin_address + '</div>';
             if (m.dest_address) html += '<div class="route-subtitle">🎯 ' + m.dest_address + '</div>';
             html += '</div>';
-            var statusText = { 'pending': 'Ожидает', 'accepted': 'Принят', 'in_transit': 'В пути', 'delivered_by_carrier': 'Доставлено (ждём подтв.)', 'delivered': 'Завершён' };
+            var statusText = { 'pending': 'Ожидает', 'accepted': 'Принят', 'in_transit': 'В пути', 'delivered_by_carrier': 'Доставлено', 'delivered': 'Завершён' };
             html += '<span class="route-status-badge status-' + m.status + '">' + (statusText[m.status] || m.status) + '</span>';
             html += '</div>';
             
             html += '<div class="route-info-grid">';
             html += '<div class="route-info-item"><div class="lbl">Груз</div><div class="val">' + (m.weight_kg || 0) + ' т · ' + (m.cargo_type || '—') + '</div></div>';
-            html += '<div class="route-info-item"><div class="lbl">Цена</div><div class="val price">' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() : '0') + ' ₽</div></div>';
+            html += '<div class="route-info-item"><div class="lbl">Цена</div><div class="val price">' + formatPrice(m.cargo_price) + '</div></div>';
             html += '<div class="route-info-item"><div class="lbl">Грузоотправитель</div><div class="val">' + (m.shipper_name || '—') + ' <span class="rating-badge">⭐ ' + (m.shipper_rating ? parseFloat(m.shipper_rating).toFixed(1) : '0.0') + '</span></div></div>';
             html += '<div class="route-info-item"><div class="lbl">Перевозчик</div><div class="val">' + (m.carrier_name || '—') + ' <span class="rating-badge">⭐ ' + (m.carrier_rating ? parseFloat(m.carrier_rating).toFixed(1) : '0.0') + '</span></div></div>';
             html += '</div>';
@@ -539,11 +568,11 @@ async function loadRoutesData() {
             if (m.escrow_status_check) {
                 html += '<div class="cost-breakdown">';
                 var escrowStatusText = m.escrow_status_check === 'held' ? '🔒 Зарезервировано' : m.escrow_status_check === 'released' ? '✅ Выплачено' : m.escrow_status_check === 'refunded' ? '↩️ Возврат' : m.escrow_status_check === 'disputed' ? '⚠️ Спор' : m.escrow_status_check;
-                html += '<div class="cost-row total"><span>💰 Оплата в Escrow <small style="color:#4ADE80;">(' + escrowStatusText + ')</small></span><span>' + (m.escrow_amount ? parseFloat(m.escrow_amount).toLocaleString() + ' ₽' : '—') + '</span></div>';
-                if (m.driver_pay) html += '<div class="cost-row driver"><span>💵 Перевозчику (70%)</span><span>' + parseFloat(m.driver_pay).toLocaleString() + ' ₽</span></div>';
-                if (m.fuel) html += '<div class="cost-row fuel"><span>⛽ Топливо (15%)</span><span>' + parseFloat(m.fuel).toLocaleString() + ' ₽</span></div>';
-                if (m.tolls) html += '<div class="cost-row tolls"><span>🛣️ Платные дороги (5%)</span><span>' + parseFloat(m.tolls).toLocaleString() + ' ₽</span></div>';
-                if (m.platform_fee) html += '<div class="cost-row fee"><span>🏦 Комиссия CargoThink (10%)</span><span>' + parseFloat(m.platform_fee).toLocaleString() + ' ₽</span></div>';
+                html += '<div class="cost-row total"><span>💰 Оплата в Escrow <small style="color:#4ADE80;">(' + escrowStatusText + ')</small></span><span>' + formatPrice(m.escrow_amount) + '</span></div>';
+                if (m.driver_pay) html += '<div class="cost-row driver"><span>💵 Перевозчику (70%)</span><span>' + formatPrice(m.driver_pay) + '</span></div>';
+                if (m.fuel) html += '<div class="cost-row fuel"><span>⛽ Топливо (15%)</span><span>' + formatPrice(m.fuel) + '</span></div>';
+                if (m.tolls) html += '<div class="cost-row tolls"><span>🛣️ Платные дороги (5%)</span><span>' + formatPrice(m.tolls) + '</span></div>';
+                if (m.platform_fee) html += '<div class="cost-row fee"><span>🏦 Комиссия (10%)</span><span>' + formatPrice(m.platform_fee) + '</span></div>';
                 html += '</div>';
             }
             
@@ -557,33 +586,34 @@ async function loadRoutesData() {
                 html += '<button class="btn btn-danger" onclick="declineMatch(\'' + m.id + '\')">❌ Отклонить</button>';
             }
             else if (m.status === 'accepted' && isShipper && !m.escrow_status_check) {
-                html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить в Escrow (' + (m.cargo_price ? parseFloat(m.cargo_price).toLocaleString() : '0') + ' ₽)</button>';
+                html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить в Escrow (' + formatPrice(m.cargo_price) + ')</button>';
                 html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
             }
             else if (m.status === 'accepted' && isCarrier) {
                 if (m.escrow_status_check === 'held') {
                     html += '<button class="btn btn-primary" onclick="startRoute(\'' + m.id + '\')">🚀 Начать рейс</button>';
                 } else {
-                    html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание оплаты от грузоотправителя</div>';
+                    html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ожидание оплаты</div>';
                 }
                 html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
             }
             else if (m.status === 'in_transit' && isCarrier) {
-                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'pickup\')">📍 Погрузка</button>';
-                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'delivery\')">📍 Доставка</button>';
+                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'pickup\')">📍 Погрузка + Фото</button>';
+                html += '<button class="btn btn-secondary" onclick="checkIn(\'' + m.id + '\', \'delivery\')">📍 Доставка + Фото</button>';
                 html += '<button class="btn btn-success" onclick="confirmDelivery(\'' + m.id + '\')">✅ Доставлено</button>';
             }
             else if (m.status === 'in_transit' && isShipper) {
-                html += '<div style="flex-basis:100%;padding:12px;color:#F5B51B;font-size:13px;">🚛 Груз в пути. Ожидайте доставки.</div>';
-                html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Открыть спор</button>';
+                html += '<div style="flex-basis:100%;padding:12px;color:#F5B51B;font-size:13px;">🚛 Груз в пути.</div>';
+                html += '<button class="btn btn-secondary" onclick="showETA(\'' + m.id + '\')">⏱️ ETA</button>';
+                html += '<button class="btn btn-secondary" onclick="showTracking(\'' + m.id + '\')">🗺️ GPS</button>';
+                html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Спор</button>';
             }
             else if (m.status === 'delivered_by_carrier' && isShipper) {
                 html += '<button class="btn btn-success" onclick="confirmReceipt(\'' + m.id + '\')">✅ Подтвердить получение</button>';
                 html += '<button class="btn btn-danger" onclick="openDispute(\'' + m.id + '\')">⚠️ Проблема</button>';
-                html += '<div style="flex-basis:100%;padding:12px;color:#888B93;font-size:12px;">После подтверждения оплата уйдёт перевозчику. Если что-то не так — откройте спор.</div>';
             }
             else if (m.status === 'delivered_by_carrier' && isCarrier) {
-                html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">✅ Доставлено. Ожидайте подтверждения от грузоотправителя.</div>';
+                html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">✅ Ожидайте подтверждения</div>';
             }
             else if (m.status === 'delivered') {
                 html += '<button class="btn btn-secondary" onclick="openRatingModal(\'' + m.id + '\')">⭐ Оценить</button>';
@@ -609,7 +639,7 @@ async function depositEscrow(matchId) {
     if (!confirm('Оплатить в Escrow? Деньги будут зарезервированы до подтверждения доставки.')) return;
     try {
         var result = await apiCall('/escrow/deposit', 'POST', { match_id: matchId, payment_method: 'manual' });
-        showToast('Успех', 'Оплачено ' + parseFloat(result.amount).toLocaleString() + ' ₽ в Escrow');
+        showToast('Успех', 'Оплачено ' + formatPrice(result.amount));
         loadRoutesData();
     } catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -623,10 +653,31 @@ async function checkIn(matchId, type) {
     if (navigator.geolocation) {
         navigator.geolocation.getCurrentPosition(function(pos) { lat = pos.coords.latitude; lng = pos.coords.longitude; });
     }
-    try {
-        await apiCall('/checkins/' + matchId, 'POST', { type: type, lat: lat, lng: lng });
-        showToast('Успех', 'Отметка добавлена');
-    } catch (err) { showToast('Ошибка', err.message, true); }
+    var input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.capture = 'environment';
+    input.onchange = async function() {
+        try {
+            var file = input.files[0];
+            var photoData = null;
+            if (file) {
+                photoData = await new Promise(function(resolve) {
+                    var reader = new FileReader();
+                    reader.onload = function(e) { resolve(e.target.result); };
+                    reader.readAsDataURL(file);
+                });
+                console.log('📸 Foto:', file.size, 'bytes');
+                // Foto an Backend senden
+                try {
+                    await apiCall('/proofs/' + matchId, 'POST', { type: type, photo_base64: photoData });
+                } catch (e) { console.log('Proof upload failed:', e.message); }
+            }
+            await apiCall('/checkins/' + matchId, 'POST', { type: type, lat: lat, lng: lng });
+            showToast('Успех', '📍 ' + (type === 'pickup' ? 'Погрузка' : 'Доставка') + (file ? ' + фото' : ''));
+        } catch (err) { showToast('Ошибка', err.message, true); }
+    };
+    input.click();
 }
 
 async function confirmDelivery(matchId) {
@@ -636,7 +687,7 @@ async function confirmDelivery(matchId) {
 
 async function confirmReceipt(matchId) {
     if (!confirm('Подтвердить получение? Оплата уйдёт перевозчику.')) return;
-    try { await apiCall('/matches/' + matchId + '/confirm', 'POST'); showToast('Успех', 'Оплата отпущена перевозчику'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
+    try { await apiCall('/matches/' + matchId + '/confirm', 'POST'); showToast('Успех', 'Оплата отпущена'); loadRoutesData(); } catch (err) { showToast('Ошибка', err.message, true); }
 }
 
 function openDispute(matchId) {
@@ -644,10 +695,26 @@ function openDispute(matchId) {
     if (!reason || reason.length < 10) { showToast('Ошибка', 'Слишком коротко', true); return; }
     apiCall('/disputes', 'POST', { match_id: matchId, reason: reason })
         .then(function() {
-            showToast('Спор открыт', 'Деньги заморожены до решения');
+            showToast('Спор открыт', 'Деньги заморожены');
             loadRoutesData();
         })
         .catch(function(err) { showToast('Ошибка', err.message, true); });
+}
+
+async function showETA(matchId) {
+    try {
+        var eta = await apiCall('/matches/' + matchId + '/eta');
+        var etaTime = new Date(eta.eta).toLocaleString('ru-RU');
+        showToast('⏱️ ETA', eta.distance_km + ' км · ~' + eta.hours + ' ч · ' + etaTime);
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function showTracking(matchId) {
+    try {
+        var data = await apiCall('/tracking/' + matchId + '/latest');
+        if (!data) { showToast('GPS', 'Перевозчик ещё не отправил координаты'); return; }
+        showToast('📍 GPS', 'Широта: ' + data.lat + ' · Долгота: ' + data.lng);
+    } catch (err) { showToast('Ошибка', err.message, true); }
 }
 
 function openRatingModal(matchId) {
@@ -763,7 +830,7 @@ if (token && currentUser) {
 } else {
     showAuthRequired();
 }
-console.log('🚛 CargoThink v2.4 loaded · Commission: 10%');
+console.log('🚛 CargoThink v2.5 loaded · Commission: 10%');
 </script>
 </body>
 </html>
