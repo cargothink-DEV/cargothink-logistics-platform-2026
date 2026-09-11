@@ -486,11 +486,15 @@ async function loadCargoList() {
                     html += '<button class="btn btn-danger btn-sm" onclick="deleteCargo(\'' + c.id + '\')">🗑️ Удалить</button>';
                     html += '<button class="btn btn-secondary btn-sm" onclick="createSharedLoad(\'' + c.id + '\')">👥 В совместную</button>';
                 }
-                if (c.pending_matches > 0) {
+                if (c.pending_matches > 0 && c.active_matches === 0) {
                     html += '<button class="btn btn-secondary btn-sm" onclick="navigateTo(\'routes\')">👀 Совпадения</button>';
                     html += '<button class="btn btn-warning btn-sm" onclick="declineAllMatches(\'' + c.id + '\')">❌ Отклонить все</button>';
                 }
-                if (c.active_matches > 0 || c.shipping_matches > 0) {
+                if (c.active_matches > 0) {
+                    html += '<button class="btn btn-primary btn-sm" onclick="navigateTo(\'routes\')">📦 Открыть рейс</button>';
+                    html += '<button class="btn btn-warning btn-sm" onclick="cancelActiveMatch(\'' + c.id + '\')">↩️ Отменить и вернуть деньги</button>';
+                }
+                if (c.shipping_matches > 0) {
                     html += '<button class="btn btn-primary btn-sm" onclick="navigateTo(\'routes\')">📦 Открыть рейс</button>';
                 }
                 html += '</div>';
@@ -516,6 +520,24 @@ async function declineAllMatches(cargoId) {
             await apiCall('/matches/' + toDecline[i].id + '/decline', 'POST');
         }
         showToast('Успех', 'Отклонено ' + toDecline.length);
+        loadCargoList();
+    } catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function cancelActiveMatch(cargoId) {
+    if (!confirm('Отменить активный рейс? Если оплачено — вернём деньги из Escrow.')) return;
+    try {
+        var matches = await apiCall('/matches');
+        var active = matches.filter(function(m) { return m.cargo_id === cargoId && (m.status === 'accepted' || m.status === 'pending'); });
+        if (active.length === 0) { showToast('Ошибка', 'Нет активного рейса', true); return; }
+        for (var i = 0; i < active.length; i++) {
+            if (active[i].escrow_status_check === 'held') {
+                await apiCall('/matches/' + active[i].id + '/refund', 'POST');
+            } else {
+                await apiCall('/matches/' + active[i].id + '/cancel', 'POST');
+            }
+        }
+        showToast('Успех', 'Рейс отменён, деньги возвращены');
         loadCargoList();
     } catch (err) { showToast('Ошибка', err.message, true); }
 }
@@ -704,13 +726,13 @@ async function loadRoutesData() {
                 html += '<button class="btn btn-danger" onclick="declineMatch(\'' + m.id + '\')">❌ Отклонить</button>';
             }
             else if (m.status === 'accepted' && isShipper && !m.escrow_status_check) {
-    html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить (' + formatPrice(m.cargo_price) + ')</button>';
-    html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
-}
-else if (m.status === 'accepted' && isShipper && m.escrow_status_check === 'held') {
-    html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">💰 Оплачено в Escrow — деньги вернутся если отменить сейчас</div>';
-    html += '<button class="btn btn-warning" onclick="refundMatch(\'' + m.id + '\')">↩️ Вернуть деньги и отменить</button>';
-}
+                html += '<button class="btn btn-success" onclick="depositEscrow(\'' + m.id + '\')">💳 Оплатить (' + formatPrice(m.cargo_price) + ')</button>';
+                html += '<button class="btn btn-danger" onclick="cancelMatch(\'' + m.id + '\')">✕ Отменить</button>';
+            }
+            else if (m.status === 'accepted' && isShipper && m.escrow_status_check === 'held') {
+                html += '<div style="flex-basis:100%;padding:12px;color:#4ADE80;font-size:13px;">💰 Оплачено в Escrow — деньги вернутся если отменить</div>';
+                html += '<button class="btn btn-warning" onclick="refundMatch(\'' + m.id + '\')">↩️ Вернуть деньги и отменить</button>';
+            }
             else if (m.status === 'accepted' && isCarrier) {
                 if (m.escrow_status_check === 'held') html += '<button class="btn btn-primary" onclick="startRoute(\'' + m.id + '\')">🚀 Начать рейс</button>';
                 else html += '<div style="flex-basis:100%;padding:12px;color:#FBBF24;font-size:13px;">⏳ Ждём оплаты</div>';
@@ -754,6 +776,15 @@ async function cancelMatch(matchId) {
     if (!confirm('Отменить рейс?')) return;
     try { await apiCall('/matches/' + matchId + '/cancel', 'POST'); showToast('Успех', 'Отменено'); loadRoutesData(); }
     catch (err) { showToast('Ошибка', err.message, true); }
+}
+
+async function refundMatch(matchId) {
+    if (!confirm('Вернуть деньги из Escrow и отменить рейс?')) return;
+    try {
+        var result = await apiCall('/matches/' + matchId + '/refund', 'POST');
+        showToast('Успех', 'Возвращено ' + formatPrice(result.amount));
+        loadRoutesData();
+    } catch (err) { showToast('Ошибка', err.message, true); }
 }
 
 async function depositEscrow(matchId) {
@@ -954,7 +985,7 @@ if (token && currentUser) {
 } else {
     showAuthRequired();
 }
-console.log('🚛 CargoThink v3.0 loaded · Commission: 10% · Dynamic Pricing: ON');
+console.log('🚛 CargoThink v3.1 loaded · Commission: 10% · Dynamic Pricing: ON · Refund: ON');
 </script>
 </body>
 </html>
